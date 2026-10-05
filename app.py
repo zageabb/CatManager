@@ -304,7 +304,7 @@ def create_app(test_config=None):
             raise ValueError("suppliers must be a list.")
         return data
 
-    def persist_imported_panel(payload, replace_existing=False):
+    def persist_imported_panel(payload, replace_existing=False, audit_import=False):
         data = migrate_panel_payload(payload)
         core = data["panel"]
         panel_id = str(core["panelId"]).strip()
@@ -332,11 +332,40 @@ def create_app(test_config=None):
         if existing:
             if not replace_existing:
                 raise ValueError("Panel already exists. Enable Replace existing to import over it.")
+            existing_data = json.loads(existing["data_json"])
+            old_trail = existing_data.get("panel",{}).get("metadata",{}).get("auditTrail",[])
+            incoming_trail = data["panel"].setdefault("metadata",{}).setdefault("auditTrail",[])
+            seen_ids = {e.get("eventId") for e in old_trail if e.get("eventId")}
+            combined = json.loads(json.dumps(old_trail))
+            for event in incoming_trail:
+                event_id = event.get("eventId")
+                if event_id and event_id in seen_ids:
+                    continue
+                if not event_id and event in combined:
+                    continue
+                combined.append(event)
+                if event_id:
+                    seen_ids.add(event_id)
+            data["panel"]["metadata"]["auditTrail"] = combined
+            if audit_import:
+                append_audit(
+                    data,
+                    "panel_import_replaced",
+                    panel_id,
+                    {"changes": panel_change_summary(existing_data, data)},
+                )
             db.execute(
                 """UPDATE panels SET panel_name=?,category=?,business=?,region_level=?,region_value=?,owner=?,mdf_code=?,data_json=?,updated_at=? WHERE panel_id=?""",
                 (core["panelName"],category,business,region_level,region_value,owner,lead,json.dumps(data),ts,panel_id),
             )
         else:
+            if audit_import:
+                append_audit(
+                    data,
+                    "panel_imported",
+                    panel_id,
+                    {"sourceSchemaVersion": payload.get("schemaVersion", 1)},
+                )
             created = data["panel"]["metadata"].get("createdAt") or ts
             db.execute(
                 """INSERT INTO panels(panel_id,panel_name,category,business,region_level,region_value,owner,mdf_code,data_json,created_at,updated_at)
@@ -672,7 +701,11 @@ def create_app(test_config=None):
                 return render_template("panel_import.html"),400
             try:
                 payload = json.loads(upload.stream.read().decode("utf-8-sig"))
-                panel_id = persist_imported_panel(payload, replace_existing=request.form.get("replace_existing") == "1")
+                panel_id = persist_imported_panel(
+                    payload,
+                    replace_existing=request.form.get("replace_existing") == "1",
+                    audit_import=True,
+                )
             except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as exc:
                 flash(f"Panel import failed: {exc}","error")
                 return render_template("panel_import.html"),400
