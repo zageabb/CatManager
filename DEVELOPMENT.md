@@ -30,7 +30,8 @@ An item is complete only when the source is present, relevant tests pass, and CI
   - Evidence: `mdf_codes` table and seed migration, `/settings/mdf` administration, active/inactive controls with in-use guard, panel-form selector sourced from database, behavioural tests.
 - [x] DEV-011A Scalable MDF selection for the full catalogue.
   - Evidence: supplied MDF catalogue loaded from `data/mdf_codes.json`; panel create/edit uses a compact searchable multi-select dropdown with selected chips; Lead MDF dropdown is restricted to selected MDFs.
-- [ ] DEV-012 Portfolio favourites, sorting, pagination and persistent filters.
+- [x] DEV-012 Portfolio favourites, sorting, pagination and persistent filters.
+  - Evidence: persistent SQLite favourite flag and toggle route; Favourites portfolio tab; sortable portfolio headers; configurable 10/20/50/100 row pagination; session-backed search/category/business/sort/page-size persistence with Reset; behavioural tests.
 - [ ] DEV-013 True dashboard calculations including configurable spend/currency semantics and qualification review dates.
 - [ ] DEV-014 Field deletion impact preview when supplier data exists; preserve orphan data until explicit migration.
 - [ ] DEV-015 Import/export JSON file actions and schema-version migration.
