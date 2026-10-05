@@ -544,3 +544,70 @@ def test_field_removal_previews_impact_preserves_orphan_and_allows_restore_or_pu
     assert "rating" not in purged_body["panel"]["suppliers"][0]["customFields"]
     assert "rating" not in purged_body["panel"]["metadata"]["orphanedSupplierFields"]
     assert purged_body["panel"]["metadata"]["auditTrail"][-1]["action"]=="orphan_field_purged"
+
+
+def test_panel_import_migrates_v1_and_export_returns_current_schema(client):
+    legacy={
+        "schemaVersion":1,
+        "panel":{
+            "panelId":"CMP6000",
+            "panelName":"Legacy Import",
+            "category":"Transformers",
+            "business":"GI",
+            "region":{"level":"Global","value":"Global"},
+            "panelOwner":{"name":"Owner"},
+            "mdfCode":"MDF-TR-001",
+            "supplierFields":[],
+            "suppliers":[],
+        },
+    }
+    response=client.post(
+        "/panels/import",
+        data={"panel_file":(io.BytesIO(json.dumps(legacy).encode("utf-8")),"legacy.json")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code==302
+    body=client.get("/api/panels/CMP6000").get_json()
+    assert body["schemaVersion"]==3
+    assert body["panel"]["leadMdfCode"]=="MDF-TR-001"
+    assert body["panel"]["mdfCodes"]==["MDF-TR-001"]
+    assert body["panel"]["metadata"]["version"]==3
+    exported=client.get("/panels/CMP6000/export")
+    assert exported.status_code==200
+    assert exported.mimetype=="application/json"
+    assert 'attachment; filename="CMP6000.json"' in exported.headers["Content-Disposition"]
+    exported_body=json.loads(exported.data)
+    assert exported_body["schemaVersion"]==3
+
+def test_panel_import_requires_replace_for_existing_panel(client):
+    create_panel(client)
+    payload=client.get("/api/panels/CMP1000").get_json()
+    payload["panel"]["panelName"]="Imported Replacement"
+    blocked=client.post(
+        "/panels/import",
+        data={"panel_file":(io.BytesIO(json.dumps(payload).encode("utf-8")),"panel.json")},
+        content_type="multipart/form-data",
+    )
+    assert blocked.status_code==400
+    assert client.get("/api/panels/CMP1000").get_json()["panel"]["panelName"]=="Test Transformers"
+
+    replaced=client.post(
+        "/panels/import",
+        data={
+            "panel_file":(io.BytesIO(json.dumps(payload).encode("utf-8")),"panel.json"),
+            "replace_existing":"1",
+        },
+        content_type="multipart/form-data",
+    )
+    assert replaced.status_code==302
+    assert client.get("/api/panels/CMP1000").get_json()["panel"]["panelName"]=="Imported Replacement"
+
+def test_panel_import_rejects_future_schema(client):
+    payload={"schemaVersion":99,"panel":{}}
+    response=client.post(
+        "/panels/import",
+        data={"panel_file":(io.BytesIO(json.dumps(payload).encode("utf-8")),"future.json")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code==400
+    assert b"Unsupported schemaVersion 99" in response.data
