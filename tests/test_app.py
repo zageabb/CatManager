@@ -106,8 +106,10 @@ def test_archive_panel_requires_confirmation_and_is_reversible(client):
 
     archived=client.post("/panels/CMP1000/archive", data={"confirm_panel_id":"CMP1000"})
     assert archived.status_code==302
-    assert b"CMP1000" not in client.get("/").data
-    assert b"CMP1000" in client.get("/?archived=1").data
+    active_page=client.get("/").data
+    archived_page=client.get("/?archived=1").data
+    assert b'href="/panels/CMP1000"' not in active_page
+    assert b'href="/panels/CMP1000"' in archived_page
     body=client.get("/api/panels/CMP1000").get_json()
     assert body["panel"]["metadata"]["status"]=="archived"
     assert body["panel"]["metadata"]["auditTrail"][-1]["action"]=="panel_archived"
