@@ -19,7 +19,8 @@ def create_panel(client, panel_id="CMP1000"):
         "region_level": "Country",
         "region_value": "United Kingdom",
         "owner": "Test Owner",
-        "mdf_code": "MDF-TR-001",
+        "mdf_codes": ["MDF-TR-001"],
+        "lead_mdf_code": "MDF-TR-001",
         "fields_json": json.dumps([{"fieldId":"rating","fieldName":"Rating","type":"number","required":False,"options":[]}]),
     })
 
@@ -148,3 +149,38 @@ def test_mdf_master_data_admin_and_usage_guard(client):
     assert reactivated.status_code==302
     new_panel=client.get("/panels/new")
     assert b'MDF-NEW-001' in new_panel.data
+
+
+def test_panel_supports_multiple_mdf_codes(client):
+    response=client.post("/panels/new", data={
+        "panel_id":"CMP2000",
+        "panel_name":"Multi MDF Panel",
+        "category":"Transformers",
+        "business":"GI",
+        "region_level":"Global",
+        "region_value":"Global",
+        "owner":"Owner",
+        "mdf_codes":["MDF-TR-001","3GF"],
+        "lead_mdf_code":"MDF-TR-001",
+        "fields_json":"[]",
+    })
+    assert response.status_code==302
+    body=client.get("/api/panels/CMP2000").get_json()
+    assert body["panel"]["leadMdfCode"]=="MDF-TR-001"
+    assert set(body["panel"]["mdfCodes"])=={"MDF-TR-001","3GF"}
+    assert body["panel"]["mdfCode"]=="MDF-TR-001"
+
+def test_lead_mdf_must_be_selected(client):
+    response=client.post("/panels/new", data={
+        "panel_id":"CMP2001",
+        "panel_name":"Invalid MDF Panel",
+        "category":"Transformers",
+        "business":"GI",
+        "region_level":"Global",
+        "region_value":"Global",
+        "owner":"Owner",
+        "mdf_codes":["3GF"],
+        "lead_mdf_code":"MDF-TR-001",
+        "fields_json":"[]",
+    })
+    assert response.status_code==400
