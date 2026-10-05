@@ -143,12 +143,12 @@ def test_mdf_master_data_admin_and_usage_guard(client):
     deactivated=client.post("/settings/mdf/MDF-NEW-001/toggle")
     assert deactivated.status_code==302
     new_panel=client.get("/panels/new")
-    assert b'MDF-NEW-001' not in new_panel.data
+    assert b'value="MDF-NEW-001"' not in new_panel.data
 
     reactivated=client.post("/settings/mdf/MDF-NEW-001/toggle")
     assert reactivated.status_code==302
     new_panel=client.get("/panels/new")
-    assert b'MDF-NEW-001' in new_panel.data
+    assert b'value="MDF-NEW-001"' in new_panel.data
 
 
 def test_panel_supports_multiple_mdf_codes(client):
