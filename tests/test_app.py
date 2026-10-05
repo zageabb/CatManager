@@ -255,3 +255,72 @@ def test_uploaded_mdf_catalogue_is_loaded(client):
     assert page.status_code==200
     assert b"Terminal Blocks" in page.data
     assert b"Offshore Route Preparation Services" in page.data
+
+
+def test_portfolio_favourites_sorting_pagination_and_persistent_filters(client):
+    for idx in range(12):
+        response=client.post("/panels/new", data={
+            "panel_id":f"CMP3{idx:03d}",
+            "panel_name":f"Panel {chr(65 + (11-idx))}",
+            "category":"Transformers" if idx % 2 == 0 else "Switchgear",
+            "business":"GI" if idx % 2 == 0 else "GPQSS",
+            "region_level":"Country",
+            "region_value":"United Kingdom",
+            "owner":f"Owner {idx:02d}",
+            "mdf_codes":["MDF-TR-001"],
+            "lead_mdf_code":"MDF-TR-001",
+            "fields_json":"[]",
+        })
+        assert response.status_code==302
+
+    fav=client.post("/panels/CMP3000/favourite", data={"return_to":"/"})
+    assert fav.status_code==302
+    favourites=client.get("/?favourites=1")
+    assert b"CMP3000" in favourites.data
+    assert b"CMP3001" not in favourites.data
+
+    page=client.get("/?category=Transformers&business=GI&q=Panel&page_size=10&sort=panel&direction=asc")
+    assert page.status_code==200
+    assert b"Page 1 of" in page.data
+    assert b"10 rows" in page.data
+    first_pos=page.data.find(b"Panel B")
+    later_pos=page.data.find(b"Panel D")
+    assert first_pos != -1 and later_pos != -1 and first_pos < later_pos
+
+    with client.session_transaction() as sess:
+        saved=sess["portfolio_filters"]
+        assert saved["category"]=="Transformers"
+        assert saved["business"]=="GI"
+        assert saved["q"]=="Panel"
+        assert saved["sort"]=="panel"
+        assert saved["direction"]=="asc"
+
+    persisted=client.get("/")
+    assert b'value="Panel"' in persisted.data
+    assert b"Transformers" in persisted.data
+
+    reset=client.get("/?clear=1", follow_redirects=True)
+    assert reset.status_code==200
+    with client.session_transaction() as sess:
+        assert "portfolio_filters" not in sess
+
+def test_portfolio_paginates_large_result_sets(client):
+    for idx in range(11):
+        response=client.post("/panels/new", data={
+            "panel_id":f"CMP4{idx:03d}",
+            "panel_name":f"Paged Panel {idx:02d}",
+            "category":"Transformers",
+            "business":"GI",
+            "region_level":"Global",
+            "region_value":"Global",
+            "owner":"Owner",
+            "mdf_codes":["MDF-TR-001"],
+            "lead_mdf_code":"MDF-TR-001",
+            "fields_json":"[]",
+        })
+        assert response.status_code==302
+    first=client.get("/?q=Paged+Panel&page_size=10&sort=panel&direction=asc")
+    second=client.get("/?q=Paged+Panel&page_size=10&sort=panel&direction=asc&page=2")
+    assert b"Page 1 of 2" in first.data
+    assert b"Page 2 of 2" in second.data
+    assert b"CMP4010" in second.data
