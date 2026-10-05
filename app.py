@@ -27,11 +27,12 @@ def load_mdf_catalogue():
     if catalogue_path.exists():
         try:
             rows = json.loads(catalogue_path.read_text(encoding="utf-8"))
-            return [
-                {"code": str(row["code"]).strip(), "description": str(row["description"]).strip()}
-                for row in rows
-                if row.get("code") and row.get("description")
-            ]
+            merged = {m["code"]: dict(m) for m in DEFAULT_MDF_CODES}
+            for row in rows:
+                if row.get("code") and row.get("description"):
+                    code = str(row["code"]).strip()
+                    merged[code] = {"code": code, "description": str(row["description"]).strip()}
+            return list(merged.values())
         except (json.JSONDecodeError, KeyError, TypeError):
             pass
     return DEFAULT_MDF_CODES
