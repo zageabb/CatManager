@@ -27,7 +27,9 @@ An item is complete only when the source is present, relevant tests pass, and CI
 - [x] DEV-010 Reversible panel archive lifecycle with explicit confirmation and restore.
   - Evidence: SQLite `archived_at` migration, archive/restore routes, archived portfolio filter, lifecycle audit entries and behavioural tests.
 - [x] DEV-011 MDF master-data administration screen with SQLite-backed reference data.
-  - Evidence: `mdf_codes` table and seed migration, `/settings/mdf` administration, active/inactive controls with in-use guard, panel-form dropdown sourced from database, behavioural tests.
+  - Evidence: `mdf_codes` table and seed migration, `/settings/mdf` administration, active/inactive controls with in-use guard, panel-form selector sourced from database, behavioural tests.
+- [x] DEV-011A Scalable MDF selection for the full catalogue.
+  - Evidence: supplied MDF catalogue loaded from `data/mdf_codes.json`; panel create/edit uses a compact searchable multi-select dropdown with selected chips; Lead MDF dropdown is restricted to selected MDFs.
 - [ ] DEV-012 Portfolio favourites, sorting, pagination and persistent filters.
 - [ ] DEV-013 True dashboard calculations including configurable spend/currency semantics and qualification review dates.
 - [ ] DEV-014 Field deletion impact preview when supplier data exists; preserve orphan data until explicit migration.
