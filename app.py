@@ -599,8 +599,63 @@ def create_app(test_config=None):
         suppliers = existing["data"]["panel"].get("suppliers",[]) if existing else []
         created_at = existing["created_at"] if existing else now_iso()
         value = region_value or region_level
-        existing_metadata = existing["data"]["panel"].get("metadata", {}) if existing else None
+        existing_metadata = json.loads(json.dumps(existing["data"]["panel"].get("metadata", {}))) if existing else None
+
+        removed_field_impacts = []
+        removed_fields = []
+        if existing:
+            old_fields = {f["fieldId"]: f for f in existing["data"]["panel"].get("supplierFields",[])}
+            new_ids = {f["fieldId"] for f in fields}
+            removed_fields = [f for fid,f in old_fields.items() if fid not in new_ids]
+            for field in removed_fields:
+                affected = []
+                for supplier in suppliers:
+                    value_at_field = supplier.get("customFields",{}).get(field["fieldId"])
+                    if value_at_field not in (None,""):
+                        affected.append({
+                            "supplierId": supplier.get("supplierId"),
+                            "supplierName": supplier.get("supplierName"),
+                            "value": value_at_field,
+                        })
+                if affected:
+                    removed_field_impacts.append({
+                        "field": field,
+                        "affectedCount": len(affected),
+                        "examples": affected[:5],
+                    })
+
+        if removed_field_impacts and request.form.get("confirm_field_removal") != "1":
+            form_data = {key: request.form.getlist(key) for key in request.form.keys()}
+            return render_template(
+                "field_removal_preview.html",
+                panel=existing,
+                impacts=removed_field_impacts,
+                form_data=form_data,
+            ),409
+
+        if existing_metadata is not None:
+            orphaned = existing_metadata.setdefault("orphanedSupplierFields", {})
+            for field in removed_fields:
+                affected_count = sum(
+                    1 for supplier in suppliers
+                    if supplier.get("customFields",{}).get(field["fieldId"]) not in (None,"")
+                )
+                orphaned[field["fieldId"]] = {
+                    "field": field,
+                    "removedAt": now_iso(),
+                    "affectedSuppliers": affected_count,
+                }
+            for field in fields:
+                orphaned.pop(field["fieldId"], None)
+
         payload = build_panel_payload(panel_id,panel_name,category,business,region_level,value,owner,mdf_codes,lead_mdf_code,fields,suppliers,created_at,existing_metadata)
+        if removed_fields:
+            append_audit(
+                payload,
+                "panel_fields_removed",
+                panel_id,
+                {"fields":[{"fieldId":f["fieldId"],"fieldName":f["fieldName"]} for f in removed_fields]},
+            )
         ts = now_iso()
         try:
             if existing:
@@ -646,6 +701,81 @@ def create_app(test_config=None):
     @app.route("/panels/<panel_id>")
     def panel_view(panel_id):
         return render_template("panel_view.html",panel=get_panel_or_404(panel_id))
+
+    @app.route("/panels/<panel_id>/fields/orphans")
+    def orphan_fields(panel_id):
+        panel = get_panel_or_404(panel_id)
+        orphans = panel["data"]["panel"].get("metadata",{}).get("orphanedSupplierFields",{})
+        rows = []
+        for field_id, info in orphans.items():
+            values = []
+            for supplier in panel["data"]["panel"].get("suppliers",[]):
+                value = supplier.get("customFields",{}).get(field_id)
+                if value not in (None,""):
+                    values.append({
+                        "supplierId": supplier.get("supplierId"),
+                        "supplierName": supplier.get("supplierName"),
+                        "value": value,
+                    })
+            rows.append({"fieldId":field_id,"info":info,"values":values})
+        rows.sort(key=lambda x:(x["info"].get("field",{}).get("fieldName") or x["fieldId"]).lower())
+        return render_template("orphan_fields.html",panel=panel,orphans=rows)
+
+    @app.route("/panels/<panel_id>/fields/orphans/<field_id>/restore", methods=["POST"])
+    def orphan_field_restore(panel_id, field_id):
+        panel = get_panel_or_404(panel_id)
+        data = panel["data"]
+        metadata = data["panel"].setdefault("metadata",{})
+        orphans = metadata.setdefault("orphanedSupplierFields",{})
+        info = orphans.get(field_id)
+        if info is None:
+            from flask import abort
+            abort(404)
+        fields = data["panel"].setdefault("supplierFields",[])
+        if not any(f.get("fieldId") == field_id for f in fields):
+            restored = json.loads(json.dumps(info.get("field",{})))
+            restored["order"] = len(fields) + 1
+            fields.append(restored)
+        orphans.pop(field_id,None)
+        append_audit(data,"orphan_field_restored",panel_id,{"fieldId":field_id})
+        save_panel_data(panel,data)
+        flash(f"Field {field_id} restored with its preserved supplier values.","success")
+        return redirect(url_for("panel_view",panel_id=panel_id))
+
+    @app.route("/panels/<panel_id>/fields/orphans/<field_id>/purge", methods=["POST"])
+    def orphan_field_purge(panel_id, field_id):
+        panel = get_panel_or_404(panel_id)
+        data = panel["data"]
+        metadata = data["panel"].setdefault("metadata",{})
+        orphans = metadata.setdefault("orphanedSupplierFields",{})
+        info = orphans.get(field_id)
+        if info is None:
+            from flask import abort
+            abort(404)
+        confirmation = request.form.get("confirm_field_id","").strip()
+        if confirmation != field_id:
+            flash("Orphan data was not purged: confirmation did not match the field ID.","error")
+            return redirect(url_for("orphan_fields",panel_id=panel_id))
+        snapshots = []
+        for supplier in data["panel"].get("suppliers",[]):
+            custom = supplier.get("customFields",{})
+            if field_id in custom:
+                snapshots.append({
+                    "supplierId": supplier.get("supplierId"),
+                    "value": custom.get(field_id),
+                })
+                custom.pop(field_id,None)
+        snapshot_info = json.loads(json.dumps(info))
+        orphans.pop(field_id,None)
+        append_audit(
+            data,
+            "orphan_field_purged",
+            panel_id,
+            {"fieldId":field_id,"field":snapshot_info,"values":snapshots},
+        )
+        save_panel_data(panel,data)
+        flash(f"Orphan field data for {field_id} purged. A recovery snapshot remains in the audit trail.","success")
+        return redirect(url_for("orphan_fields",panel_id=panel_id))
 
     @app.route("/panels/<panel_id>/suppliers/new", methods=["GET","POST"])
     def supplier_new(panel_id):
