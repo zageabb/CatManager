@@ -11,7 +11,7 @@ CATEGORIES = ["Transformers", "Switchgear", "Current Transformers", "Civil Engin
 BUSINESSES = ["GI", "GA", "GPQSS", "HVDC"]
 REGION_LEVELS = ["Global", "Region", "HUB", "Country"]
 FIELD_TYPES = ["number", "text", "dropdown", "date"]
-MDF_CODES = [
+DEFAULT_MDF_CODES = [
     {"code": "3GF", "description": "Grid equipment"},
     {"code": "MDF-TR-001", "description": "Power Transformers"},
     {"code": "MDF-SG-001", "description": "High Voltage Switchgear"},
@@ -62,10 +62,23 @@ def create_app(test_config=None):
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS mdf_codes (
+            code TEXT PRIMARY KEY,
+            description TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         """)
         columns = {row[1] for row in db.execute("PRAGMA table_info(panels)").fetchall()}
         if "archived_at" not in columns:
             db.execute("ALTER TABLE panels ADD COLUMN archived_at TEXT")
+        if db.execute("SELECT COUNT(*) FROM mdf_codes").fetchone()[0] == 0:
+            ts = now_iso()
+            db.executemany(
+                "INSERT INTO mdf_codes(code,description,active,created_at,updated_at) VALUES(?,?,?,?,?)",
+                [(m["code"], m["description"], 1, ts, ts) for m in DEFAULT_MDF_CODES],
+            )
         db.commit()
         if app.config.get("SEED_DEMO") and db.execute("SELECT COUNT(*) FROM panels").fetchone()[0] == 0:
             seed_demo(db)
@@ -164,9 +177,17 @@ def create_app(test_config=None):
             clean.append({"fieldId":fid,"fieldName":name,"type":ftype,"options":[str(x).strip() for x in options if str(x).strip()],"required":bool(field.get("required",False)),"order":index+1})
         return clean
 
+    def get_mdf_codes(include_inactive=False):
+        sql = "SELECT code,description,active FROM mdf_codes"
+        params = ()
+        if not include_inactive:
+            sql += " WHERE active=1"
+        sql += " ORDER BY code"
+        return [dict(row) for row in get_db().execute(sql, params).fetchall()]
+
     @app.context_processor
     def inject_globals():
-        return dict(categories=CATEGORIES,businesses=BUSINESSES,region_levels=REGION_LEVELS,mdf_codes=MDF_CODES)
+        return dict(categories=CATEGORIES,businesses=BUSINESSES,region_levels=REGION_LEVELS,mdf_codes=get_mdf_codes())
 
     @app.route("/")
     def portfolio():
@@ -424,6 +445,58 @@ def create_app(test_config=None):
             flash("Panel JSON updated.","success")
             return redirect(url_for("panel_data",panel_id=panel_id))
         return render_template("data_settings.html",panel=panel,raw_json=json.dumps(panel["data"],indent=2))
+
+    @app.route("/settings/mdf", methods=["GET","POST"])
+    def mdf_settings():
+        if request.method == "POST":
+            code = request.form.get("code","").strip().upper()
+            description = request.form.get("description","").strip()
+            if not code or not description:
+                flash("MDF Code and description are required.","error")
+                return redirect(url_for("mdf_settings"))
+            try:
+                get_db().execute(
+                    "INSERT INTO mdf_codes(code,description,active,created_at,updated_at) VALUES(?,?,?,?,?)",
+                    (code, description, 1, now_iso(), now_iso()),
+                )
+                get_db().commit()
+                flash(f"MDF code {code} added.","success")
+            except sqlite3.IntegrityError:
+                flash(f"MDF code {code} already exists.","error")
+            return redirect(url_for("mdf_settings"))
+        return render_template("mdf_settings.html", mdf_codes=get_mdf_codes(include_inactive=True))
+
+    @app.route("/settings/mdf/<code>/update", methods=["POST"])
+    def mdf_update(code):
+        row = get_db().execute("SELECT * FROM mdf_codes WHERE code=?", (code,)).fetchone()
+        if row is None:
+            from flask import abort
+            abort(404)
+        description = request.form.get("description","").strip()
+        if not description:
+            flash("Description is required.","error")
+            return redirect(url_for("mdf_settings"))
+        get_db().execute("UPDATE mdf_codes SET description=?,updated_at=? WHERE code=?", (description, now_iso(), code))
+        get_db().commit()
+        flash(f"MDF code {code} updated.","success")
+        return redirect(url_for("mdf_settings"))
+
+    @app.route("/settings/mdf/<code>/toggle", methods=["POST"])
+    def mdf_toggle(code):
+        row = get_db().execute("SELECT * FROM mdf_codes WHERE code=?", (code,)).fetchone()
+        if row is None:
+            from flask import abort
+            abort(404)
+        new_active = 0 if row["active"] else 1
+        if new_active == 0:
+            in_use = get_db().execute("SELECT COUNT(*) FROM panels WHERE mdf_code=? AND archived_at IS NULL", (code,)).fetchone()[0]
+            if in_use:
+                flash(f"MDF code {code} is used by {in_use} active panel(s) and cannot be deactivated.","error")
+                return redirect(url_for("mdf_settings"))
+        get_db().execute("UPDATE mdf_codes SET active=?,updated_at=? WHERE code=?", (new_active, now_iso(), code))
+        get_db().commit()
+        flash(f"MDF code {code} {'activated' if new_active else 'deactivated'}.","success")
+        return redirect(url_for("mdf_settings"))
 
     @app.route("/api/panels")
     def api_panels():
