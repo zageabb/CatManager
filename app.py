@@ -237,6 +237,80 @@ def create_app(test_config=None):
             clean.append({"fieldId":fid,"fieldName":name,"type":ftype,"options":[str(x).strip() for x in options if str(x).strip()],"required":bool(field.get("required",False)),"order":index+1})
         return clean
 
+    def migrate_panel_payload(payload):
+        if not isinstance(payload, dict) or not isinstance(payload.get("panel"), dict):
+            raise ValueError("JSON must contain a panel object.")
+        data = json.loads(json.dumps(payload))
+        version = int(data.get("schemaVersion", 1))
+        if version > 3:
+            raise ValueError(f"Unsupported schemaVersion {version}.")
+        core = data["panel"]
+        metadata = core.setdefault("metadata", {})
+        metadata.setdefault("createdAt", now_iso())
+        metadata.setdefault("updatedAt", now_iso())
+        metadata.setdefault("auditTrail", [])
+        if version < 3:
+            lead = core.get("leadMdfCode") or core.get("mdfCode")
+            core["leadMdfCode"] = lead
+            core["mdfCode"] = lead
+            core["mdfCodes"] = core.get("mdfCodes") or ([lead] if lead else [])
+        data["schemaVersion"] = 3
+        metadata["version"] = max(int(metadata.get("version", 1)), 3)
+        required = ["panelId","panelName","category","business","region","panelOwner","supplierFields","suppliers","leadMdfCode","mdfCodes"]
+        if not all(k in core for k in required):
+            missing = [k for k in required if k not in core]
+            raise ValueError("JSON is missing required panel properties: " + ", ".join(missing))
+        if not isinstance(core["region"], dict) or "level" not in core["region"]:
+            raise ValueError("region must contain level and value.")
+        if not isinstance(core["panelOwner"], dict):
+            raise ValueError("panelOwner must be an object.")
+        core["supplierFields"] = parse_fields(json.dumps(core.get("supplierFields",[])))
+        if not isinstance(core.get("suppliers"), list):
+            raise ValueError("suppliers must be a list.")
+        return data
+
+    def persist_imported_panel(payload, replace_existing=False):
+        data = migrate_panel_payload(payload)
+        core = data["panel"]
+        panel_id = str(core["panelId"]).strip()
+        if not panel_id:
+            raise ValueError("panelId is required.")
+        category = str(core["category"])
+        business = str(core["business"])
+        region = core["region"]
+        region_level = str(region.get("level",""))
+        region_value = str(region.get("value") or region_level)
+        owner = str(core.get("panelOwner",{}).get("name") or "").strip()
+        lead = str(core.get("leadMdfCode") or "").strip()
+        selected_mdfs = [str(x).strip() for x in core.get("mdfCodes",[]) if str(x).strip()]
+        if category not in CATEGORIES or business not in BUSINESSES or region_level not in REGION_LEVELS:
+            raise ValueError("Imported panel contains invalid controlled values.")
+        if not owner or not lead or lead not in selected_mdfs:
+            raise ValueError("Imported panel needs an owner, selected MDFs, and a valid Lead MDF.")
+        known_mdfs = {m["code"] for m in get_mdf_codes(include_inactive=True)}
+        if any(code not in known_mdfs for code in selected_mdfs):
+            raise ValueError("Imported panel contains MDF codes not present in the MDF master.")
+        db = get_db()
+        existing = db.execute("SELECT * FROM panels WHERE panel_id=?", (panel_id,)).fetchone()
+        ts = now_iso()
+        data["panel"]["metadata"]["updatedAt"] = ts
+        if existing:
+            if not replace_existing:
+                raise ValueError("Panel already exists. Enable Replace existing to import over it.")
+            db.execute(
+                """UPDATE panels SET panel_name=?,category=?,business=?,region_level=?,region_value=?,owner=?,mdf_code=?,data_json=?,updated_at=? WHERE panel_id=?""",
+                (core["panelName"],category,business,region_level,region_value,owner,lead,json.dumps(data),ts,panel_id),
+            )
+        else:
+            created = data["panel"]["metadata"].get("createdAt") or ts
+            db.execute(
+                """INSERT INTO panels(panel_id,panel_name,category,business,region_level,region_value,owner,mdf_code,data_json,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                (panel_id,core["panelName"],category,business,region_level,region_value,owner,lead,json.dumps(data),created,ts),
+            )
+        db.commit()
+        return panel_id
+
     def get_mdf_codes(include_inactive=False):
         sql = "SELECT code,description,active FROM mdf_codes"
         params = ()
@@ -553,6 +627,31 @@ def create_app(test_config=None):
         if not return_to.startswith("/") or return_to.startswith("//"):
             return_to = url_for("portfolio")
         return redirect(return_to)
+
+    @app.route("/panels/import", methods=["GET","POST"])
+    def panel_import():
+        if request.method == "POST":
+            upload = request.files.get("panel_file")
+            if upload is None or not upload.filename:
+                flash("Choose a panel JSON file to import.","error")
+                return render_template("panel_import.html"),400
+            try:
+                payload = json.loads(upload.stream.read().decode("utf-8-sig"))
+                panel_id = persist_imported_panel(payload, replace_existing=request.form.get("replace_existing") == "1")
+            except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as exc:
+                flash(f"Panel import failed: {exc}","error")
+                return render_template("panel_import.html"),400
+            flash(f"Panel {panel_id} imported successfully.","success")
+            return redirect(url_for("panel_view",panel_id=panel_id))
+        return render_template("panel_import.html")
+
+    @app.route("/panels/<panel_id>/export")
+    def panel_export(panel_id):
+        panel = get_panel_or_404(panel_id)
+        body = json.dumps(panel["data"], indent=2, ensure_ascii=False) + "\n"
+        response = app.response_class(body, mimetype="application/json")
+        response.headers["Content-Disposition"] = f'attachment; filename="{panel_id}.json"'
+        return response
 
     @app.route("/panels/new", methods=["GET","POST"])
     def panel_new():
