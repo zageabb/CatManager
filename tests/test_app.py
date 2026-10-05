@@ -58,3 +58,40 @@ def test_raw_json_rejects_panel_id_change(client):
     payload["panel"]["panelId"]="OTHER"
     response=client.post("/panels/CMP1000/data", data={"raw_json":json.dumps(payload)})
     assert response.status_code==400
+
+
+def test_edit_supplier_preserves_id_and_records_audit(client):
+    create_panel(client)
+    client.post("/panels/CMP1000/suppliers/new", data={
+        "supplier_id":"SUP-1","supplier_name":"Supplier One","address":"Road","post_code":"AA1 1AA","custom_rating":"250"
+    })
+    response=client.post("/panels/CMP1000/suppliers/SUP-1/edit", data={
+        "supplier_id":"SUP-1","supplier_name":"Supplier Updated","address":"New Road","post_code":"BB2 2BB","custom_rating":"300"
+    })
+    assert response.status_code==302
+    body=client.get("/api/panels/CMP1000").get_json()
+    supplier=body["panel"]["suppliers"][0]
+    assert supplier["supplierId"]=="SUP-1"
+    assert supplier["supplierName"]=="Supplier Updated"
+    assert supplier["customFields"]["rating"]==300.0
+    audit=body["panel"]["metadata"]["auditTrail"]
+    assert audit[-1]["action"]=="supplier_updated"
+    assert audit[-1]["details"]["before"]["supplierName"]=="Supplier One"
+
+def test_delete_supplier_requires_exact_confirmation_and_keeps_snapshot(client):
+    create_panel(client)
+    client.post("/panels/CMP1000/suppliers/new", data={
+        "supplier_id":"SUP-1","supplier_name":"Supplier One","address":"Road","post_code":"AA1 1AA","custom_rating":"250"
+    })
+    refused=client.post("/panels/CMP1000/suppliers/SUP-1/delete", data={"confirm_supplier_id":"wrong"})
+    assert refused.status_code==302
+    body=client.get("/api/panels/CMP1000").get_json()
+    assert len(body["panel"]["suppliers"])==1
+
+    accepted=client.post("/panels/CMP1000/suppliers/SUP-1/delete", data={"confirm_supplier_id":"SUP-1"})
+    assert accepted.status_code==302
+    body=client.get("/api/panels/CMP1000").get_json()
+    assert body["panel"]["suppliers"]==[]
+    audit=body["panel"]["metadata"]["auditTrail"]
+    assert audit[-1]["action"]=="supplier_deleted"
+    assert audit[-1]["details"]["snapshot"]["supplierId"]=="SUP-1"
