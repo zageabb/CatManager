@@ -744,3 +744,67 @@ def test_panel_import_records_audit_event(client):
     assert response.status_code==302
     imported=client.get("/api/panels/CMP-AUDIT-IMPORT").get_json()
     assert imported["panel"]["metadata"]["auditTrail"][-1]["action"]=="panel_imported"
+
+
+def test_portfolio_panel_qualification_uses_worst_supplier_status(client):
+    fields=[
+        {"fieldId":"qualification_status","fieldName":"Qualification Status","type":"text","required":False,"options":[]}
+    ]
+    response=client.post("/panels/new", data={
+        "panel_id":"CMP-QUAL",
+        "panel_name":"Qualification Demo",
+        "category":"Transformers",
+        "business":"GI",
+        "region_level":"HUB",
+        "region_value":"Europe",
+        "owner":"Europe Hub",
+        "mdf_codes":["MDF-TR-001"],
+        "lead_mdf_code":"MDF-TR-001",
+        "fields_json":json.dumps(fields),
+    })
+    assert response.status_code==302
+
+    for sid,status in [
+        ("SUP-Q1","Qualified"),
+        ("SUP-Q2","In review"),
+        ("SUP-Q3","Not qualified"),
+    ]:
+        added=client.post("/panels/CMP-QUAL/suppliers/new", data={
+            "supplier_id":sid,
+            "supplier_name":sid,
+            "address":"Road",
+            "post_code":"AA1 1AA",
+            "custom_qualification_status":status,
+        })
+        assert added.status_code==302
+
+    page=client.get("/?q=Qualification+Demo")
+    assert page.status_code==200
+    assert b"Not qualified" in page.data
+
+def test_portfolio_panel_qualification_falls_back_to_in_review_then_qualified(client):
+    fields=[
+        {"fieldId":"qualification_status","fieldName":"Qualification Status","type":"text","required":False,"options":[]}
+    ]
+    client.post("/panels/new", data={
+        "panel_id":"CMP-QUAL2",
+        "panel_name":"Qualification Demo Two",
+        "category":"Transformers",
+        "business":"GI",
+        "region_level":"HUB",
+        "region_value":"Europe",
+        "owner":"Europe Hub",
+        "mdf_codes":["MDF-TR-001"],
+        "lead_mdf_code":"MDF-TR-001",
+        "fields_json":json.dumps(fields),
+    })
+    for sid,status in [("SUP-A","Qualified"),("SUP-B","In review")]:
+        client.post("/panels/CMP-QUAL2/suppliers/new", data={
+            "supplier_id":sid,
+            "supplier_name":sid,
+            "address":"Road",
+            "post_code":"AA1 1AA",
+            "custom_qualification_status":status,
+        })
+    page=client.get("/?q=Qualification+Demo+Two")
+    assert b"In review" in page.data
