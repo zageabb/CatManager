@@ -36,7 +36,8 @@ An item is complete only when the source is present, relevant tests pass, and CI
   - Evidence: `/settings/dashboard` maps supplier field IDs to dashboard meanings; configurable base currency and manual conversion rates; active-panel spend is converted before aggregation while unknown currencies are surfaced separately; top suppliers are calculated from live records; qualification status is dynamic; qualification review dates are bucketed into overdue, due within 30 days, future, missing/invalid; portfolio row spend uses the configured base currency; behavioural tests.
 - [x] DEV-014 Field deletion impact preview with preserved orphan data and explicit migration actions.
   - Evidence: removing a populated custom field first shows affected supplier counts/examples and requires confirmation; removed definitions are stored under `metadata.orphanedSupplierFields` while supplier values remain untouched; panel view surfaces orphan management; users can restore the field with all values intact or explicitly purge orphan values using exact field-ID confirmation; purge snapshots remain in the audit trail; behavioural tests.
-- [ ] DEV-015 Import/export JSON file actions and schema-version migration.
+- [x] DEV-015 Import/export JSON file actions and schema-version migration.
+  - Evidence: portfolio Import Panel workflow accepts JSON schema versions 1–3, migrates older MDF/metadata structures to schema 3, validates controlled values and MDF master references, requires explicit replacement for existing Panel IDs, and persists searchable metadata consistently; panel view offers downloadable JSON export; future schema versions are rejected; behavioural tests.
 - [ ] DEV-016 Audit log for panel schema and supplier changes.
 - [ ] DEV-017 Authentication/authorization with Category Manager and read-only roles.
 - [ ] DEV-018 Production configuration, CSRF protection, migrations and deployment documentation.
