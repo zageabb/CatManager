@@ -478,3 +478,69 @@ def test_dashboard_settings_reject_invalid_currency_rates(client):
     })
     assert response.status_code==400
     assert b"Currency rates must use" in response.data
+
+
+def test_field_removal_previews_impact_preserves_orphan_and_allows_restore_or_purge(client):
+    create_panel(client)
+    client.post("/panels/CMP1000/suppliers/new", data={
+        "supplier_id":"SUP-ORPHAN",
+        "supplier_name":"Orphan Supplier",
+        "address":"Road",
+        "post_code":"AA1 1AA",
+        "custom_rating":"250",
+    })
+    edit_data={
+        "panel_id":"CMP1000",
+        "panel_name":"Test Transformers",
+        "category":"Transformers",
+        "business":"GI",
+        "region_level":"Country",
+        "region_value":"United Kingdom",
+        "owner":"Test Owner",
+        "mdf_codes":["MDF-TR-001"],
+        "lead_mdf_code":"MDF-TR-001",
+        "fields_json":"[]",
+    }
+
+    preview=client.post("/panels/CMP1000/edit", data=edit_data)
+    assert preview.status_code==409
+    assert b"Field removal impact" in preview.data
+    assert b"Rating" in preview.data
+    assert b"SUP-ORPHAN" in preview.data
+
+    before=client.get("/api/panels/CMP1000").get_json()
+    assert before["panel"]["supplierFields"][0]["fieldId"]=="rating"
+    assert before["panel"]["suppliers"][0]["customFields"]["rating"]==250.0
+
+    confirmed=client.post("/panels/CMP1000/edit", data={**edit_data,"confirm_field_removal":"1"})
+    assert confirmed.status_code==302
+    body=client.get("/api/panels/CMP1000").get_json()
+    assert body["panel"]["supplierFields"]==[]
+    assert body["panel"]["suppliers"][0]["customFields"]["rating"]==250.0
+    orphan=body["panel"]["metadata"]["orphanedSupplierFields"]["rating"]
+    assert orphan["field"]["fieldName"]=="Rating"
+    assert orphan["affectedSuppliers"]==1
+
+    orphan_page=client.get("/panels/CMP1000/fields/orphans")
+    assert orphan_page.status_code==200
+    assert b"Orphan Supplier" in orphan_page.data
+    assert b"250.0" in orphan_page.data
+
+    restored=client.post("/panels/CMP1000/fields/orphans/rating/restore")
+    assert restored.status_code==302
+    restored_body=client.get("/api/panels/CMP1000").get_json()
+    assert restored_body["panel"]["supplierFields"][0]["fieldId"]=="rating"
+    assert "rating" not in restored_body["panel"]["metadata"]["orphanedSupplierFields"]
+
+    client.post("/panels/CMP1000/edit", data=edit_data)
+    client.post("/panels/CMP1000/edit", data={**edit_data,"confirm_field_removal":"1"})
+    refused=client.post("/panels/CMP1000/fields/orphans/rating/purge", data={"confirm_field_id":"wrong"})
+    assert refused.status_code==302
+    assert "rating" in client.get("/api/panels/CMP1000").get_json()["panel"]["suppliers"][0]["customFields"]
+
+    purged=client.post("/panels/CMP1000/fields/orphans/rating/purge", data={"confirm_field_id":"rating"})
+    assert purged.status_code==302
+    purged_body=client.get("/api/panels/CMP1000").get_json()
+    assert "rating" not in purged_body["panel"]["suppliers"][0]["customFields"]
+    assert "rating" not in purged_body["panel"]["metadata"]["orphanedSupplierFields"]
+    assert purged_body["panel"]["metadata"]["auditTrail"][-1]["action"]=="orphan_field_purged"
