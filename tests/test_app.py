@@ -1,3 +1,4 @@
+import io
 import json
 import pytest
 from app import create_app
@@ -324,3 +325,78 @@ def test_portfolio_paginates_large_result_sets(client):
     assert b"Page 1 of 2" in first.data
     assert b"Page 2 of 2" in second.data
     assert b"CMP4010" in second.data
+
+
+def test_supplier_master_import_generates_addresses_and_supports_typeahead(client):
+    csv_data = b"BPID,Supplier_Name\n1000000001,Alpha Engineering\n1000000002,Beta Power Ltd\n"
+    response = client.post(
+        "/settings/suppliers",
+        data={"supplier_file": (io.BytesIO(csv_data), "suppliers.csv")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 302
+
+    search = client.get("/api/supplier-master/search?q=Alpha")
+    assert search.status_code == 200
+    rows = search.get_json()
+    assert rows[0]["bpid"] == "1000000001"
+    assert rows[0]["supplier_name"] == "Alpha Engineering"
+    assert rows[0]["address"]
+    assert rows[0]["post_code"]
+    assert rows[0]["address_source"] == "generated"
+
+    by_bpid = client.get("/api/supplier-master/search?q=1000000002")
+    assert by_bpid.get_json()[0]["supplier_name"] == "Beta Power Ltd"
+
+    form = client.get("/panels/new")
+    assert form.status_code == 200
+
+def test_supplier_master_remove_hides_from_selection_but_can_restore(client):
+    csv_data = b"BPID,Supplier_Name\n1000000010,Remove Me Ltd\n"
+    client.post(
+        "/settings/suppliers",
+        data={"supplier_file": (io.BytesIO(csv_data), "suppliers.csv")},
+        content_type="multipart/form-data",
+    )
+    assert client.get("/api/supplier-master/search?q=Remove").get_json()
+
+    removed = client.post("/settings/suppliers/1000000010/remove")
+    assert removed.status_code == 302
+    assert client.get("/api/supplier-master/search?q=Remove").get_json() == []
+
+    removed_page = client.get("/settings/suppliers?removed=1&q=Remove")
+    assert b"Remove Me Ltd" in removed_page.data
+    assert b"Removed" in removed_page.data
+
+    restored = client.post("/settings/suppliers/1000000010/restore")
+    assert restored.status_code == 302
+    assert client.get("/api/supplier-master/search?q=Remove").get_json()
+
+def test_add_supplier_uses_master_data_when_bpid_selected(client):
+    create_panel(client)
+    csv_data = b"BPID,Supplier_Name,Address,Post_Code\n1000000020,Master Supplier Ltd,1 Real Road,AB1 2CD\n"
+    client.post(
+        "/settings/suppliers",
+        data={"supplier_file": (io.BytesIO(csv_data), "suppliers.csv")},
+        content_type="multipart/form-data",
+    )
+    response = client.post("/panels/CMP1000/suppliers/new", data={
+        "supplier_id":"1000000020",
+        "supplier_name":"Wrong Manual Name",
+        "address":"Wrong Address",
+        "post_code":"ZZ1 1ZZ",
+        "custom_rating":"123",
+    })
+    assert response.status_code == 302
+    supplier = client.get("/api/panels/CMP1000").get_json()["panel"]["suppliers"][0]
+    assert supplier["supplierName"] == "Master Supplier Ltd"
+    assert supplier["address"] == "1 Real Road"
+    assert supplier["postCode"] == "AB1 2CD"
+    assert supplier["masterLinked"] is True
+
+def test_supplier_form_contains_master_typeahead(client):
+    create_panel(client)
+    page = client.get("/panels/CMP1000/suppliers/new")
+    assert page.status_code == 200
+    assert b"Find supplier by BPID or name" in page.data
+    assert b"supplier-master-search" in page.data
