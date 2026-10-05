@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import os
 import sqlite3
@@ -84,6 +86,17 @@ def create_app(test_config=None):
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS supplier_master (
+            bpid TEXT PRIMARY KEY,
+            supplier_name TEXT NOT NULL,
+            address TEXT NOT NULL DEFAULT '',
+            post_code TEXT NOT NULL DEFAULT '',
+            address_source TEXT NOT NULL DEFAULT 'generated',
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_supplier_master_name ON supplier_master(supplier_name);
         """)
         columns = {row[1] for row in db.execute("PRAGMA table_info(panels)").fetchall()}
         if "archived_at" not in columns:
@@ -225,6 +238,80 @@ def create_app(test_config=None):
         if not include_inactive:
             sql += " WHERE active=1"
         sql += " ORDER BY code"
+        return [dict(row) for row in get_db().execute(sql, params).fetchall()]
+
+
+    def generic_supplier_address(bpid):
+        digits = "".join(ch for ch in str(bpid) if ch.isdigit()) or "0"
+        n = int(digits[-4:]) if digits else 0
+        unit = (n % 180) + 1
+        estate = ["Supplier Business Park", "Industrial Estate", "Commerce Park", "Technology Park"][n % 4]
+        town = ["Stafford", "Birmingham", "Manchester", "Leeds", "Nottingham", "Bristol"][n % 6]
+        postcode = ["ST16 1AA", "B1 1AA", "M1 1AA", "LS1 1AA", "NG1 1AA", "BS1 1AA"][n % 6]
+        return f"Unit {unit}, {estate}, {town}, UK", postcode
+
+    def import_supplier_rows(rows):
+        db = get_db()
+        imported = updated = skipped = 0
+        ts = now_iso()
+        for row in rows:
+            bpid = str(row.get("BPID") or row.get("bpid") or "").strip()
+            name = str(row.get("Supplier_Name") or row.get("supplier_name") or row.get("Name") or "").strip()
+            if not bpid or not name:
+                skipped += 1
+                continue
+            address = str(row.get("Address") or row.get("address") or "").strip()
+            post_code = str(row.get("Post_Code") or row.get("PostCode") or row.get("post_code") or "").strip()
+            address_source = "source"
+            if not address:
+                address, generated_post = generic_supplier_address(bpid)
+                address_source = "generated"
+                if not post_code:
+                    post_code = generated_post
+            existing = db.execute("SELECT bpid FROM supplier_master WHERE bpid=?", (bpid,)).fetchone()
+            if existing:
+                db.execute(
+                    """UPDATE supplier_master
+                       SET supplier_name=?,address=?,post_code=?,address_source=?,active=1,updated_at=?
+                       WHERE bpid=?""",
+                    (name,address,post_code,address_source,ts,bpid),
+                )
+                updated += 1
+            else:
+                db.execute(
+                    """INSERT INTO supplier_master
+                       (bpid,supplier_name,address,post_code,address_source,active,created_at,updated_at)
+                       VALUES(?,?,?,?,?,1,?,?)""",
+                    (bpid,name,address,post_code,address_source,ts,ts),
+                )
+                imported += 1
+        db.commit()
+        return imported, updated, skipped
+
+    def supplier_master_search(query, include_inactive=False, limit=30):
+        q = (query or "").strip()
+        sql = """SELECT bpid,supplier_name,address,post_code,address_source,active
+                 FROM supplier_master"""
+        params = []
+        where = []
+        if not include_inactive:
+            where.append("active=1")
+        if q:
+            where.append("(bpid LIKE ? OR supplier_name LIKE ?)")
+            like = f"%{q}%"
+            params.extend([like, like])
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += """ ORDER BY
+                    CASE WHEN bpid = ? THEN 0
+                         WHEN bpid LIKE ? THEN 1
+                         WHEN supplier_name LIKE ? THEN 2
+                         ELSE 3 END,
+                    supplier_name
+                 LIMIT ?"""
+        exact = q
+        prefix = f"{q}%"
+        params.extend([exact, prefix, prefix, int(limit)])
         return [dict(row) for row in get_db().execute(sql, params).fetchall()]
 
     @app.context_processor
@@ -466,7 +553,21 @@ def create_app(test_config=None):
             supplier_id = request.form.get("supplier_id","").strip()
             if not supplier_id or any(s["supplierId"] == supplier_id for s in suppliers):
                 flash("Supplier ID is required and must be unique within the panel.","error")
-                return render_template("supplier_form.html",panel=panel),400
+                return render_template("supplier_form.html",panel=panel,supplier=None),400
+            master = get_db().execute(
+                "SELECT * FROM supplier_master WHERE bpid=? AND active=1",
+                (supplier_id,),
+            ).fetchone()
+            supplier_name = request.form.get("supplier_name","").strip()
+            address = request.form.get("address","").strip()
+            post_code = request.form.get("post_code","").strip()
+            if master is not None:
+                supplier_name = master["supplier_name"]
+                address = master["address"]
+                post_code = master["post_code"]
+            if not supplier_name:
+                flash("Supplier Name is required. Select a master supplier or enter a manual supplier.","error")
+                return render_template("supplier_form.html",panel=panel,supplier=None),400
             custom = {}
             for field in data["panel"].get("supplierFields",[]):
                 value = request.form.get(f"custom_{field['fieldId']}","")
@@ -476,8 +577,8 @@ def create_app(test_config=None):
                         flash(f"{field['fieldName']} must be numeric.","error")
                         return render_template("supplier_form.html",panel=panel),400
                 custom[field["fieldId"]] = value
-            suppliers.append({"supplierId":supplier_id,"supplierName":request.form.get("supplier_name","").strip(),"address":request.form.get("address","").strip(),"postCode":request.form.get("post_code","").strip(),"customFields":custom})
-            append_audit(data, "supplier_created", supplier_id, {"supplierName": request.form.get("supplier_name","").strip()})
+            suppliers.append({"supplierId":supplier_id,"supplierName":supplier_name,"address":address,"postCode":post_code,"masterLinked":master is not None,"customFields":custom})
+            append_audit(data, "supplier_created", supplier_id, {"supplierName": supplier_name, "masterLinked": master is not None})
             save_panel_data(panel, data)
             flash("Supplier added.","success")
             return redirect(url_for("panel_view",panel_id=panel_id))
@@ -631,6 +732,59 @@ def create_app(test_config=None):
             flash("Panel JSON updated.","success")
             return redirect(url_for("panel_data",panel_id=panel_id))
         return render_template("data_settings.html",panel=panel,raw_json=json.dumps(panel["data"],indent=2))
+
+    @app.route("/settings/suppliers", methods=["GET","POST"])
+    def supplier_master_settings():
+        if request.method == "POST":
+            upload = request.files.get("supplier_file")
+            if upload is None or not upload.filename:
+                flash("Choose a supplier CSV file to import.","error")
+                return redirect(url_for("supplier_master_settings"))
+            try:
+                text = upload.stream.read().decode("utf-8-sig")
+                reader = csv.DictReader(io.StringIO(text))
+                if not reader.fieldnames or "BPID" not in reader.fieldnames or "Supplier_Name" not in reader.fieldnames:
+                    raise ValueError("CSV must contain BPID and Supplier_Name columns.")
+                imported, updated, skipped = import_supplier_rows(reader)
+                flash(f"Supplier master imported: {imported} new, {updated} updated, {skipped} skipped.","success")
+            except (UnicodeDecodeError, csv.Error, ValueError) as exc:
+                flash(f"Supplier import failed: {exc}","error")
+            return redirect(url_for("supplier_master_settings"))
+        q = request.args.get("q","").strip()
+        show_removed = request.args.get("removed") == "1"
+        suppliers = supplier_master_search(q, include_inactive=show_removed, limit=200)
+        total = get_db().execute("SELECT COUNT(*) FROM supplier_master WHERE active=1").fetchone()[0]
+        removed = get_db().execute("SELECT COUNT(*) FROM supplier_master WHERE active=0").fetchone()[0]
+        return render_template("supplier_master.html",suppliers=suppliers,q=q,show_removed=show_removed,total=total,removed=removed)
+
+    @app.route("/settings/suppliers/<bpid>/remove", methods=["POST"])
+    def supplier_master_remove(bpid):
+        row = get_db().execute("SELECT * FROM supplier_master WHERE bpid=?", (bpid,)).fetchone()
+        if row is None:
+            from flask import abort
+            abort(404)
+        get_db().execute("UPDATE supplier_master SET active=0,updated_at=? WHERE bpid=?", (now_iso(),bpid))
+        get_db().commit()
+        flash(f"Supplier {bpid} removed from active master selection.","success")
+        return redirect(url_for("supplier_master_settings"))
+
+    @app.route("/settings/suppliers/<bpid>/restore", methods=["POST"])
+    def supplier_master_restore(bpid):
+        row = get_db().execute("SELECT * FROM supplier_master WHERE bpid=?", (bpid,)).fetchone()
+        if row is None:
+            from flask import abort
+            abort(404)
+        get_db().execute("UPDATE supplier_master SET active=1,updated_at=? WHERE bpid=?", (now_iso(),bpid))
+        get_db().commit()
+        flash(f"Supplier {bpid} restored to the active master list.","success")
+        return redirect(url_for("supplier_master_settings", removed=1))
+
+    @app.route("/api/supplier-master/search")
+    def api_supplier_master_search():
+        q = request.args.get("q","").strip()
+        if len(q) < 2:
+            return jsonify([])
+        return jsonify(supplier_master_search(q, include_inactive=False, limit=20))
 
     @app.route("/settings/mdf", methods=["GET","POST"])
     def mdf_settings():
