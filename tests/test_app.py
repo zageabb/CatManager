@@ -611,3 +611,45 @@ def test_panel_import_rejects_future_schema(client):
     )
     assert response.status_code==400
     assert b"Unsupported schemaVersion 99" in response.data
+
+
+def test_seeded_demo_panels_use_historical_abb_europe_hub_data(tmp_path):
+    seeded_app=create_app({
+        "TESTING": True,
+        "DATABASE": str(tmp_path / "seeded.sqlite"),
+        "SEED_DEMO": True,
+        "SECRET_KEY": "test",
+    })
+    seeded_client=seeded_app.test_client()
+
+    portfolio=seeded_client.get("/")
+    assert portfolio.status_code==200
+    assert b"Power and Distribution Transformers" in portfolio.data
+    assert b"LV &amp; MV Cables" in portfolio.data
+    assert b"MV Switchgear" in portfolio.data
+    assert b"Instrument Transformers" in portfolio.data
+    assert b"Civil Works" in portfolio.data
+    assert b"Engineering Services" in portfolio.data
+    assert b"Protection &amp; Control Relays" in portfolio.data
+
+    body=seeded_client.get("/api/panels/ABB-3GX").get_json()
+    assert body["panel"]["region"]=={"level":"HUB","value":"Europe"}
+    assert body["panel"]["metadata"]["legacySource"]=="Dynamic Supplier Panel 07Sep2021.xlsm"
+    assert body["panel"]["metadata"]["legacySheet"]=="3GX"
+    assert body["panel"]["leadMdfCode"]=="3GX"
+    assert body["panel"]["suppliers"][0]["supplierName"]=="Koncar Power Transformers Ltd."
+    assert body["panel"]["suppliers"][0]["address"]
+    assert body["panel"]["suppliers"][0]["postCode"]
+    assert body["panel"]["suppliers"][0]["customFields"]["country"]=="Croatia"
+    assert body["panel"]["suppliers"][0]["customFields"]["classification"]=="2. HBU Preferred"
+    assert body["panel"]["suppliers"][0]["customFields"]["ksm"]=="Emre Gul"
+    assert body["panel"]["suppliers"][0]["customFields"]["supplier_risk"]=="Medium"
+
+    civil=seeded_client.get("/api/panels/ABB-CIV").get_json()
+    assert civil["panel"]["region"]=={"level":"HUB","value":"Europe"}
+    field_ids={f["fieldId"] for f in civil["panel"]["supplierFields"]}
+    assert {"branch_location","turnover_kusd","minimum_project_amount_kusd"} <= field_ids
+
+    edit_page=seeded_client.get("/panels/ABB-3GX/edit")
+    assert edit_page.status_code==200
+    assert b"3GX" in edit_page.data
