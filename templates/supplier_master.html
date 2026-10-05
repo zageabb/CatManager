@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Supplier master{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('portfolio') }}">Category panel</a><span>›</span><span>Supplier master</span>{% endblock %}
+{% block content %}
+<div class="page-title-row">
+  <div><h1>Supplier master</h1><p class="subtitle">Authoritative BPID list used when adding suppliers to panels.</p></div>
+</div>
+
+<section class="form-card">
+  <h2>Import supplier CSV</h2>
+  <p class="subtitle">Expected columns: <strong>BPID</strong> and <strong>Supplier_Name</strong>. Missing addresses are filled with clearly generic placeholder addresses so supplier records remain complete.</p>
+  <form method="post" enctype="multipart/form-data" class="inline-form supplier-import-form">
+    <label>Supplier CSV<input type="file" name="supplier_file" accept=".csv,text/csv" required></label>
+    <button class="btn primary" type="submit">Import / Update Master</button>
+  </form>
+</section>
+
+<section class="table-card settings-table">
+  <div class="table-toolbar">
+    <div>
+      <h2>Master suppliers</h2>
+      <p>{{ total }} active · {{ removed }} removed</p>
+    </div>
+    <form method="get" class="filters">
+      <input name="q" value="{{ q }}" placeholder="Search BPID or supplier name">
+      {% if show_removed %}<input type="hidden" name="removed" value="1">{% endif %}
+      <button class="btn" type="submit">Search</button>
+      <a class="btn" href="{{ url_for('supplier_master_settings', removed=1 if not show_removed else None) }}">{{ 'Show removed' if not show_removed else 'Active only' }}</a>
+    </form>
+  </div>
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead><tr><th>BPID</th><th>Supplier</th><th>Address</th><th>Post Code</th><th>Address source</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody>
+      {% for s in suppliers %}
+        <tr class="{{ '' if s.active else 'archived-row' }}">
+          <td><strong>{{ s.bpid }}</strong></td>
+          <td>{{ s.supplier_name }}</td>
+          <td>{{ s.address }}</td>
+          <td>{{ s.post_code }}</td>
+          <td><span class="status-label">{{ s.address_source }}</span></td>
+          <td><span class="pill {{ 'green' if s.active else 'pink' }}">{{ 'Active' if s.active else 'Removed' }}</span></td>
+          <td>
+            {% if s.active %}
+              <form method="post" action="{{ url_for('supplier_master_remove', bpid=s.bpid) }}" onsubmit="return confirm('Remove {{ s.bpid }} from active supplier selection? Existing panel records will not be deleted.')">
+                <button class="btn compact danger" type="submit">Remove</button>
+              </form>
+            {% else %}
+              <form method="post" action="{{ url_for('supplier_master_restore', bpid=s.bpid) }}">
+                <button class="btn compact" type="submit">Restore</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">No suppliers match this search.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
