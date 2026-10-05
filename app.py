@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from flask import Flask, flash, g, jsonify, redirect, render_template, request, url_for
+from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
 
 CATEGORIES = ["Transformers", "Switchgear", "Current Transformers", "Civil Engineering"]
 BUSINESSES = ["GI", "GA", "GPQSS", "HVDC"]
@@ -88,6 +88,8 @@ def create_app(test_config=None):
         columns = {row[1] for row in db.execute("PRAGMA table_info(panels)").fetchall()}
         if "archived_at" not in columns:
             db.execute("ALTER TABLE panels ADD COLUMN archived_at TEXT")
+        if "is_favourite" not in columns:
+            db.execute("ALTER TABLE panels ADD COLUMN is_favourite INTEGER NOT NULL DEFAULT 0")
         ts = now_iso()
         for m in load_mdf_catalogue():
             db.execute(
@@ -231,25 +233,93 @@ def create_app(test_config=None):
 
     @app.route("/")
     def portfolio():
+        if request.args.get("clear") == "1":
+            session.pop("portfolio_filters", None)
+            return redirect(url_for("portfolio"))
+
+        saved = session.get("portfolio_filters", {})
+        filter_keys = ("q", "category", "business", "sort", "direction", "page_size")
+        explicit_filters = any(key in request.args for key in filter_keys)
+        if explicit_filters:
+            filters = {
+                "q": request.args.get("q","").strip(),
+                "category": request.args.get("category",""),
+                "business": request.args.get("business",""),
+                "sort": request.args.get("sort","updated"),
+                "direction": request.args.get("direction","desc"),
+                "page_size": request.args.get("page_size","20"),
+            }
+            session["portfolio_filters"] = filters
+        else:
+            filters = {
+                "q": saved.get("q",""),
+                "category": saved.get("category",""),
+                "business": saved.get("business",""),
+                "sort": saved.get("sort","updated"),
+                "direction": saved.get("direction","desc"),
+                "page_size": saved.get("page_size","20"),
+            }
+
         show_archived = request.args.get("archived","") == "1"
-        rows = get_db().execute("SELECT * FROM panels ORDER BY updated_at DESC").fetchall()
+        favourites_only = request.args.get("favourites","") == "1"
+        rows = get_db().execute("SELECT * FROM panels").fetchall()
         all_panels = [row_to_panel(r) for r in rows]
         panels = [p for p in all_panels if show_archived or not p.get("archived_at")]
-        search = request.args.get("q","").strip().lower()
-        category = request.args.get("category","")
-        business = request.args.get("business","")
+        if favourites_only:
+            panels = [p for p in panels if p.get("is_favourite")]
+
+        search = filters["q"].lower()
+        category = filters["category"]
+        business = filters["business"]
         if search:
-            panels = [p for p in panels if search in " ".join([p["panel_id"],p["panel_name"],p["category"],p["business"],p["region_value"],p["owner"]]).lower()]
+            panels = [p for p in panels if search in " ".join([p["panel_id"],p["panel_name"],p["category"],p["business"],p["region_value"],p["owner"],p["mdf_code"]]).lower()]
         if category:
             panels = [p for p in panels if p["category"] == category]
         if business:
             panels = [p for p in panels if p["business"] == business]
+
+        sort_key = filters["sort"] if filters["sort"] in {"panel","mdf","category","business","region","owner","suppliers","updated"} else "updated"
+        direction = "asc" if filters["direction"] == "asc" else "desc"
+        reverse = direction == "desc"
+        def portfolio_sort_value(panel):
+            core = panel["data"]["panel"]
+            values = {
+                "panel": panel["panel_name"].lower(),
+                "mdf": panel["mdf_code"].lower(),
+                "category": panel["category"].lower(),
+                "business": panel["business"].lower(),
+                "region": panel["region_value"].lower(),
+                "owner": panel["owner"].lower(),
+                "suppliers": len(core.get("suppliers",[])),
+                "updated": panel["updated_at"],
+            }
+            return values[sort_key]
+        panels.sort(key=portfolio_sort_value, reverse=reverse)
+
+        try:
+            page_size = int(filters["page_size"])
+        except (TypeError, ValueError):
+            page_size = 20
+        if page_size not in {10,20,50,100}:
+            page_size = 20
+        filters["page_size"] = str(page_size)
+        try:
+            page = max(int(request.args.get("page","1")), 1)
+        except ValueError:
+            page = 1
+        filtered_total = len(panels)
+        page_count = max((filtered_total + page_size - 1) // page_size, 1)
+        page = min(page, page_count)
+        start = (page - 1) * page_size
+        panels = panels[start:start + page_size]
 
         supplier_count = 0
         spend_by_category = {}
         qualifications = {"In review":0,"Qualified":0,"Not qualified":0}
         classifications = {"Standard":0,"Preferred":0,"Critical":0}
         for p in all_panels:
+            if p.get("archived_at"):
+                continue
             suppliers = p["data"]["panel"].get("suppliers",[])
             supplier_count += len(suppliers)
             for supplier in suppliers:
@@ -261,7 +331,35 @@ def create_app(test_config=None):
         top_spend = sorted(spend_by_category.items(), key=lambda x:x[1], reverse=True)[:4]
         active_total = sum(1 for p in all_panels if not p.get("archived_at"))
         archived_total = len(all_panels) - active_total
-        return render_template("portfolio.html",panels=panels,total_panels=active_total,supplier_count=supplier_count,top_spend=top_spend,qualifications=qualifications,classifications=classifications,show_archived=show_archived,archived_total=archived_total)
+        favourite_total = sum(1 for p in all_panels if p.get("is_favourite") and not p.get("archived_at"))
+        return render_template(
+            "portfolio.html",
+            panels=panels,
+            total_panels=active_total,
+            filtered_total=filtered_total,
+            supplier_count=supplier_count,
+            top_spend=top_spend,
+            qualifications=qualifications,
+            classifications=classifications,
+            show_archived=show_archived,
+            favourites_only=favourites_only,
+            archived_total=archived_total,
+            favourite_total=favourite_total,
+            filters=filters,
+            page=page,
+            page_count=page_count,
+            page_size=page_size,
+            sort_key=sort_key,
+            direction=direction,
+        )
+
+    @app.route("/panels/<panel_id>/favourite", methods=["POST"])
+    def panel_favourite(panel_id):
+        panel = get_panel_or_404(panel_id)
+        new_value = 0 if panel.get("is_favourite") else 1
+        get_db().execute("UPDATE panels SET is_favourite=? WHERE id=?", (new_value, panel["id"]))
+        get_db().commit()
+        return redirect(request.form.get("return_to") or url_for("portfolio"))
 
     @app.route("/panels/new", methods=["GET","POST"])
     def panel_new():
