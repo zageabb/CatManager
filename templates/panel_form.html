@@ -11,15 +11,36 @@
 <label>Region value<input name="region_value" value="{{ p.get('region_value','') }}" placeholder="e.g. Europe / UK / Global"></label>
 <label>Panel Owner *<input name="owner" required value="{{ p.get('owner','') }}"></label>
 {% set selected_mdfs = p.data.panel.mdfCodes if panel and p.data.panel.mdfCodes is defined else ([p.get('mdf_code')] if p.get('mdf_code') else []) %}
-<div class="mdf-selector-block">
+<div class="mdf-selector-block" data-mdf-multiselect>
   <span class="field-label">MDF Codes *</span>
-  <div class="mdf-check-grid">
-    {% for m in mdf_codes %}
-      <label class="check-card"><input type="checkbox" name="mdf_codes" value="{{ m.code }}" {{ 'checked' if m.code in selected_mdfs }}><span><strong>{{ m.code }}</strong><small>{{ m.description }}</small></span></label>
-    {% endfor %}
+  <button class="mdf-select-trigger" type="button" aria-expanded="false">
+    <span class="mdf-trigger-text">Select MDF codes…</span>
+    <span class="mdf-trigger-count"></span>
+    <span aria-hidden="true">▾</span>
+  </button>
+  <div class="mdf-select-menu" hidden>
+    <div class="mdf-search-row">
+      <input type="search" class="mdf-search" placeholder="Search MDF code or description…" autocomplete="off">
+      <button type="button" class="btn compact mdf-clear">Clear</button>
+    </div>
+    <div class="mdf-options">
+      {% for m in mdf_codes %}
+        <label class="mdf-option" data-search="{{ (m.code ~ ' ' ~ m.description)|lower }}">
+          <input type="checkbox" name="mdf_codes" value="{{ m.code }}" data-description="{{ m.description }}" {{ 'checked' if m.code in selected_mdfs }}>
+          <span><strong>{{ m.code }}</strong><small>{{ m.description }}</small></span>
+        </label>
+      {% endfor %}
+    </div>
   </div>
+  <div class="mdf-selected-chips" aria-live="polite"></div>
+  <small class="help-text">Choose one or more MDFs. Use the search box to filter the list.</small>
 </div>
-<label>Lead MDF *<select name="lead_mdf_code" required><option value="">Select lead MDF…</option>{% for m in mdf_codes %}<option value="{{ m.code }}" {{ 'selected' if (panel and p.data.panel.get('leadMdfCode', p.get('mdf_code'))==m.code) }}>{{ m.code }} — {{ m.description }}</option>{% endfor %}</select><small class="help-text">The lead MDF must also be selected above.</small></label>
+<label>Lead MDF *
+  <select name="lead_mdf_code" id="lead-mdf-select" required data-current="{{ p.data.panel.get('leadMdfCode', p.get('mdf_code')) if panel else '' }}">
+    <option value="">Select lead MDF…</option>
+  </select>
+  <small class="help-text">Only MDFs selected above are available as the lead MDF.</small>
+</label>
 </div><div class="section-heading"><div><h2>Supplier data definition</h2><p>Fixed fields are always present. Add and reorder panel-specific custom fields below.</p></div><button class="btn" type="button" id="add-field">+ Add custom field</button></div>
 <div class="field-list">{% for fixed in ['Supplier ID','Supplier Name','Address','Post Code'] %}<div class="field-row fixed"><span class="drag">☰</span><strong>{{ fixed }}</strong><span class="field-type">Fixed</span></div>{% endfor %}<div id="custom-fields"></div></div>
 <input type="hidden" id="fields-json" name="fields_json" value="{{ fields|tojson|forceescape }}"><div class="form-actions"><a class="btn" href="{{ url_for('portfolio') }}">Cancel</a><button class="btn primary" type="submit">Save Panel</button></div></form>{% endblock %}
