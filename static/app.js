@@ -47,6 +47,69 @@
   if(add)add.addEventListener("click",function(){fields.push({fieldId:"custom_field_"+(fields.length+1),fieldName:"",type:"text",options:[],required:false,_generated:true});render();sync();});
   render();sync();
 
+  const mdfPicker=document.querySelector("[data-mdf-multiselect]");
+  if(mdfPicker){
+    const trigger=mdfPicker.querySelector(".mdf-select-trigger");
+    const menu=mdfPicker.querySelector(".mdf-select-menu");
+    const search=mdfPicker.querySelector(".mdf-search");
+    const clear=mdfPicker.querySelector(".mdf-clear");
+    const options=Array.from(mdfPicker.querySelectorAll(".mdf-option"));
+    const checks=Array.from(mdfPicker.querySelectorAll('input[name="mdf_codes"]'));
+    const chips=mdfPicker.querySelector(".mdf-selected-chips");
+    const triggerText=mdfPicker.querySelector(".mdf-trigger-text");
+    const count=mdfPicker.querySelector(".mdf-trigger-count");
+    const lead=document.querySelector("#lead-mdf-select");
+    const currentLead=lead ? lead.dataset.current : "";
+
+    function selected(){
+      return checks.filter(function(c){return c.checked;});
+    }
+    function refreshLead(){
+      if(!lead)return;
+      const previous=lead.value || currentLead;
+      lead.innerHTML='<option value="">Select lead MDF…</option>';
+      selected().forEach(function(c){
+        const opt=document.createElement("option");
+        opt.value=c.value;
+        opt.textContent=c.value+" — "+(c.dataset.description||"");
+        if(c.value===previous)opt.selected=true;
+        lead.appendChild(opt);
+      });
+      if(previous && !selected().some(function(c){return c.value===previous;}))lead.value="";
+    }
+    function refresh(){
+      const picked=selected();
+      triggerText.textContent=picked.length ? picked.slice(0,2).map(function(c){return c.value;}).join(", ")+(picked.length>2?"…":"") : "Select MDF codes…";
+      count.textContent=picked.length ? String(picked.length)+" selected" : "";
+      chips.innerHTML="";
+      picked.forEach(function(c){
+        const chip=document.createElement("button");
+        chip.type="button";
+        chip.className="mdf-chip";
+        chip.innerHTML="<strong>"+esc(c.value)+"</strong><span>×</span>";
+        chip.title="Remove "+c.value;
+        chip.addEventListener("click",function(){c.checked=false;refresh();});
+        chips.appendChild(chip);
+      });
+      refreshLead();
+    }
+    function setOpen(open){
+      menu.hidden=!open;
+      trigger.setAttribute("aria-expanded",open?"true":"false");
+      if(open){search.focus();search.select();}
+    }
+    trigger.addEventListener("click",function(e){e.stopPropagation();setOpen(menu.hidden);});
+    menu.addEventListener("click",function(e){e.stopPropagation();});
+    document.addEventListener("click",function(){if(!menu.hidden)setOpen(false);});
+    search.addEventListener("input",function(){
+      const q=search.value.trim().toLowerCase();
+      options.forEach(function(row){row.hidden=q && !row.dataset.search.includes(q);});
+    });
+    clear.addEventListener("click",function(){checks.forEach(function(c){c.checked=false;});refresh();});
+    checks.forEach(function(c){c.addEventListener("change",refresh);});
+    refresh();
+  }
+
   document.querySelectorAll("[data-copy]").forEach(function(btn){
     btn.addEventListener("click",async function(){const el=document.querySelector(btn.dataset.copy);if(!el)return;await navigator.clipboard.writeText(el.value||el.textContent||"");const old=btn.textContent;btn.textContent="Copied";setTimeout(function(){btn.textContent=old;},1200);});
   });
