@@ -359,7 +359,10 @@ def create_app(test_config=None):
         new_value = 0 if panel.get("is_favourite") else 1
         get_db().execute("UPDATE panels SET is_favourite=? WHERE id=?", (new_value, panel["id"]))
         get_db().commit()
-        return redirect(request.form.get("return_to") or url_for("portfolio"))
+        return_to = request.form.get("return_to","")
+        if not return_to.startswith("/") or return_to.startswith("//"):
+            return_to = url_for("portfolio")
+        return redirect(return_to)
 
     @app.route("/panels/new", methods=["GET","POST"])
     def panel_new():
