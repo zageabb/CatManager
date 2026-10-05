@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}MDF settings{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('portfolio') }}">Category panel</a><span>›</span><span>MDF settings</span>{% endblock %}
+{% block content %}
+<div class="page-title-row"><div><h1>MDF master data</h1><p class="subtitle">Manage the controlled MDF codes available when creating and editing panels.</p></div></div>
+
+<section class="form-card">
+  <h2>Add MDF code</h2>
+  <form method="post" class="inline-form">
+    <label>Code<input name="code" required placeholder="MDF-XX-001"></label>
+    <label>Description<input name="description" required placeholder="Description"></label>
+    <button class="btn primary" type="submit">Add MDF Code</button>
+  </form>
+</section>
+
+<section class="table-card settings-table">
+  <div class="table-toolbar"><div><h2>Configured MDF codes</h2><p>Codes in use by active panels cannot be deactivated.</p></div></div>
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead><tr><th>Code</th><th>Description</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for m in mdf_codes %}
+        <tr class="{{ '' if m.active else 'archived-row' }}">
+          <td><strong>{{ m.code }}</strong></td>
+          <td>
+            <form method="post" action="{{ url_for('mdf_update', code=m.code) }}" class="inline-row-form">
+              <input name="description" value="{{ m.description }}" required>
+              <button class="btn compact" type="submit">Save</button>
+            </form>
+          </td>
+          <td><span class="pill {{ 'green' if m.active else 'pink' }}">{{ 'Active' if m.active else 'Inactive' }}</span></td>
+          <td>
+            <form method="post" action="{{ url_for('mdf_toggle', code=m.code) }}">
+              <button class="btn compact {{ 'danger' if m.active else '' }}" type="submit">{{ 'Deactivate' if m.active else 'Activate' }}</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
