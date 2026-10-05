@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Orphaned supplier fields{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('portfolio') }}">Category panel</a><span>›</span><a href="{{ url_for('panel_view', panel_id=panel.panel_id) }}">{{ panel.panel_id }}</a><span>›</span><span>Orphaned fields</span>{% endblock %}
+{% block content %}
+{% set core=panel.data.panel %}
+<div class="page-title-row"><div><h1>Orphaned supplier fields</h1><p class="subtitle">Removed field definitions and supplier values are retained here until you restore or explicitly purge them.</p></div><a class="btn" href="{{ url_for('panel_view', panel_id=panel.panel_id) }}">Back to panel</a></div>
+<section class="table-card">
+<div class="table-toolbar"><div><h2>{{ core.panelName }}</h2><p>{{ orphans|length }} orphaned field(s)</p></div></div>
+<div class="table-scroll"><table class="data-table"><thead><tr><th>Field</th><th>Removed</th><th>Affected suppliers</th><th>Examples</th><th>Actions</th></tr></thead><tbody>
+{% for row in orphans %}
+<tr><td><strong>{{ row.info.field.fieldName }}</strong><small>{{ row.fieldId }} · {{ row.info.field.type }}</small></td><td>{{ row.info.removedAt }}</td><td>{{ row.values|length }}</td><td>{% for v in row.values[:3] %}<small>{{ v.supplierId }}: {{ v.value }}</small>{% else %}—{% endfor %}</td><td><div class="row-actions"><form method="post" action="{{ url_for('orphan_field_restore', panel_id=panel.panel_id, field_id=row.fieldId) }}"><button class="btn compact" type="submit">Restore field</button></form><form method="post" action="{{ url_for('orphan_field_purge', panel_id=panel.panel_id, field_id=row.fieldId) }}" onsubmit="return confirmOrphanPurge(this, '{{ row.fieldId }}')"><input type="hidden" name="confirm_field_id"><button class="btn compact danger" type="submit">Purge data</button></form></div></td></tr>
+{% else %}<tr><td colspan="5" class="empty">No orphaned supplier fields.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}
+{% block scripts %}<script>function confirmOrphanPurge(form, fieldId){const entered=window.prompt("Type the field ID "+fieldId+" to permanently purge its orphaned supplier values.");if(entered===null)return false;form.querySelector("[name=confirm_field_id]").value=entered.trim();return true;}</script>{% endblock %}
