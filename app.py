@@ -783,6 +783,19 @@ def create_app(test_config=None):
                 orphaned.pop(field["fieldId"], None)
 
         payload = build_panel_payload(panel_id,panel_name,category,business,region_level,value,owner,mdf_codes,lead_mdf_code,fields,suppliers,created_at,existing_metadata)
+        if existing:
+            changes = panel_change_summary(existing["data"], payload)
+            if changes:
+                append_audit(payload, "panel_updated", panel_id, {"changes": changes})
+        else:
+            append_audit(payload, "panel_created", panel_id, {
+                "panelName": panel_name,
+                "category": category,
+                "business": business,
+                "region": {"level": region_level, "value": value},
+                "leadMdfCode": lead_mdf_code,
+                "mdfCodes": mdf_codes,
+            })
         if removed_fields:
             append_audit(
                 payload,
@@ -1127,22 +1140,55 @@ def create_app(test_config=None):
         if request.method == "POST":
             raw = request.form.get("raw_json","")
             try:
-                payload = json.loads(raw)
+                payload = migrate_panel_payload(json.loads(raw))
                 core = payload["panel"]
-                required = ["panelId","panelName","category","business","region","panelOwner","mdfCode","supplierFields","suppliers"]
-                if not all(k in core for k in required):
-                    raise ValueError("JSON is missing required panel properties.")
                 if core["panelId"] != panel_id:
                     raise ValueError("Panel ID cannot be changed from the raw-data editor.")
+                previous_trail = panel["data"]["panel"].get("metadata",{}).get("auditTrail",[])
+                incoming_meta = core.setdefault("metadata",{})
+                incoming_meta["auditTrail"] = json.loads(json.dumps(previous_trail))
+                changes = panel_change_summary(panel["data"], payload)
+                append_audit(
+                    payload,
+                    "raw_json_updated",
+                    panel_id,
+                    {"changes": changes, "supplierCount": len(core.get("suppliers",[]))},
+                )
+                persist_imported_panel(payload, replace_existing=True)
             except (json.JSONDecodeError,KeyError,TypeError,ValueError) as exc:
                 flash(f"JSON not saved: {exc}","error")
                 return render_template("data_settings.html",panel=panel,raw_json=raw),400
-            core.setdefault("metadata",{})["updatedAt"] = now_iso()
-            get_db().execute("UPDATE panels SET data_json=?,updated_at=? WHERE id=?",(json.dumps(payload),now_iso(),panel["id"]))
-            get_db().commit()
             flash("Panel JSON updated.","success")
             return redirect(url_for("panel_data",panel_id=panel_id))
         return render_template("data_settings.html",panel=panel,raw_json=json.dumps(panel["data"],indent=2))
+
+    @app.route("/panels/<panel_id>/audit")
+    def panel_audit(panel_id):
+        panel = get_panel_or_404(panel_id)
+        trail = list(panel["data"]["panel"].get("metadata",{}).get("auditTrail",[]))
+        trail.reverse()
+        action_filter = request.args.get("action","").strip()
+        query = request.args.get("q","").strip().lower()
+        if action_filter:
+            trail = [event for event in trail if event.get("action") == action_filter]
+        if query:
+            trail = [
+                event for event in trail
+                if query in json.dumps(event, ensure_ascii=False).lower()
+            ]
+        actions = sorted({
+            event.get("action")
+            for event in panel["data"]["panel"].get("metadata",{}).get("auditTrail",[])
+            if event.get("action")
+        })
+        return render_template(
+            "audit_log.html",
+            panel=panel,
+            events=trail,
+            actions=actions,
+            action_filter=action_filter,
+            query=request.args.get("q","").strip(),
+        )
 
     @app.route("/settings/dashboard", methods=["GET","POST"])
     def dashboard_settings():
