@@ -239,3 +239,19 @@ def test_new_custom_field_can_be_amended_by_supplier_form_and_bulk_editor(client
     assert supplier["customFields"]["rating"]==275.0
     assert supplier["customFields"]["review_status"]=="Open"
     assert body["panel"]["metadata"]["auditTrail"][-1]["action"]=="supplier_bulk_custom_fields_updated"
+
+
+def test_mdf_selector_is_searchable_compact_multiselect(client):
+    page=client.get("/panels/new")
+    assert page.status_code==200
+    assert b"mdf-select-trigger" in page.data
+    assert b"Search MDF code or description" in page.data
+    assert b"mdf-check-grid" not in page.data
+    assert b'value="3AA"' in page.data
+    assert b'value="5BZ"' in page.data
+
+def test_uploaded_mdf_catalogue_is_loaded(client):
+    page=client.get("/settings/mdf")
+    assert page.status_code==200
+    assert b"Terminal Blocks" in page.data
+    assert b"Offshore Route Preparation Services" in page.data
