@@ -653,3 +653,94 @@ def test_seeded_demo_panels_use_historical_abb_europe_hub_data(tmp_path):
     edit_page=seeded_client.get("/panels/ABB-3GX/edit")
     assert edit_page.status_code==200
     assert b"3GX" in edit_page.data
+
+
+def test_audit_history_captures_panel_schema_supplier_and_raw_json_changes(client):
+    created=create_panel(client)
+    assert created.status_code==302
+    body=client.get("/api/panels/CMP1000").get_json()
+    assert body["panel"]["metadata"]["auditTrail"][-1]["action"]=="panel_created"
+
+    edited=client.post("/panels/CMP1000/edit", data={
+        "panel_id":"CMP1000",
+        "panel_name":"Test Transformers Updated",
+        "category":"Transformers",
+        "business":"GI",
+        "region_level":"Country",
+        "region_value":"United Kingdom",
+        "owner":"New Owner",
+        "mdf_codes":["MDF-TR-001"],
+        "lead_mdf_code":"MDF-TR-001",
+        "fields_json":json.dumps([
+            {"fieldId":"rating","fieldName":"Rating","type":"number","required":False,"options":[]},
+            {"fieldId":"notes","fieldName":"Notes","type":"text","required":False,"options":[]},
+        ]),
+    })
+    assert edited.status_code==302
+    body=client.get("/api/panels/CMP1000").get_json()
+    update_event=body["panel"]["metadata"]["auditTrail"][-1]
+    assert update_event["action"]=="panel_updated"
+    assert "panelName" in update_event["details"]["changes"]
+    assert "panelOwner" in update_event["details"]["changes"]
+    assert "supplierFields" in update_event["details"]["changes"]
+    assert update_event["eventId"]
+    assert update_event["actor"]=="local-user"
+
+    supplier=client.post("/panels/CMP1000/suppliers/new", data={
+        "supplier_id":"SUP-AUDIT",
+        "supplier_name":"Audit Supplier",
+        "address":"Road",
+        "post_code":"AA1 1AA",
+        "custom_rating":"100",
+        "custom_notes":"Created for audit",
+    })
+    assert supplier.status_code==302
+
+    audit=client.get("/panels/CMP1000/audit")
+    assert audit.status_code==200
+    assert b"Panel Created" in audit.data
+    assert b"Panel Updated" in audit.data
+    assert b"Supplier Created" in audit.data
+    assert b"Audit Supplier" in audit.data
+
+    filtered=client.get("/panels/CMP1000/audit?action=supplier_created")
+    assert filtered.status_code==200
+    assert b"Supplier Created" in filtered.data
+    assert b"Panel Updated" not in filtered.data
+
+    payload=client.get("/api/panels/CMP1000").get_json()
+    prior_count=len(payload["panel"]["metadata"]["auditTrail"])
+    payload["panel"]["panelName"]="Raw JSON Updated Name"
+    raw=client.post("/panels/CMP1000/data", data={"raw_json":json.dumps(payload)})
+    assert raw.status_code==302
+    after=client.get("/api/panels/CMP1000").get_json()
+    assert after["panel"]["panelName"]=="Raw JSON Updated Name"
+    assert len(after["panel"]["metadata"]["auditTrail"])==prior_count+1
+    assert after["panel"]["metadata"]["auditTrail"][-1]["action"]=="raw_json_updated"
+
+def test_panel_import_records_audit_event(client):
+    payload={
+        "schemaVersion":3,
+        "panel":{
+            "panelId":"CMP-AUDIT-IMPORT",
+            "panelName":"Imported Audit Panel",
+            "category":"Transformers",
+            "business":"GI",
+            "region":{"level":"HUB","value":"Europe"},
+            "panelOwner":{"name":"Europe Hub"},
+            "mdfCode":"MDF-TR-001",
+            "leadMdfCode":"MDF-TR-001",
+            "mdfCodes":["MDF-TR-001"],
+            "supplierFields":[],
+            "suppliers":[],
+            "metadata":{"version":3,"auditTrail":[]},
+        },
+    }
+    response=client.post(
+        "/panels/import",
+        data={"panel_file":(io.BytesIO(json.dumps(payload).encode("utf-8")),"panel.json")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code==302
+    imported=client.get("/api/panels/CMP-AUDIT-IMPORT").get_json()
+    assert imported["panel"]["metadata"]["auditTrail"][-1]["action"]=="panel_imported"
