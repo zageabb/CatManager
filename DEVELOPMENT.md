@@ -44,6 +44,8 @@ An item is complete only when the source is present, relevant tests pass, and CI
 - [ ] DEV-019 Accessibility and responsive UI review against the reference design.
 - [x] DEV-020 Supplier-master integration with CSV import, BPID/name typeahead, generated placeholder addresses, and reversible removal.
   - Evidence: SQLite `supplier_master` table; `/settings/suppliers` CSV import/update screen; missing addresses receive deterministic generic placeholders marked `address_source=generated`; suppliers can be removed from active selection and restored; `/api/supplier-master/search` searches BPID or Supplier Name; Add Supplier typeahead populates fixed fields from the master; behavioural tests.
+- [x] DEV-021 Historical ABB demo panels for Europe Hub.
+  - Evidence: curated panel/supplier data derived from `Dynamic Supplier Panel 07Sep2021.xlsm` is stored in `legacy_demo_data.py`; demo seeding creates Europe Hub panels for transformers, cables, MV switchgear, instrument transformers, civil works, engineering services and protection/control; old ABB MDF references are retained as inactive legacy MDF master entries; workbook-only supplier attributes are represented as custom fields; missing fixed addresses use deterministic generic demo addresses; behavioural tests verify region, legacy metadata and field mapping.
 
 ## Data model decisions
 1. A panel is the aggregate root and is stored as metadata columns plus a complete JSON object.
