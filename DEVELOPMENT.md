@@ -20,6 +20,10 @@ An item is complete only when the source is present, relevant tests pass, and CI
 ## V1 next development
 - [x] DEV-009 Supplier edit and delete with exact-ID confirmation and audit-safe snapshots.
   - Evidence: supplier edit/delete routes in `app.py`, edit/delete controls in `panel_view.html`, audit trail snapshots in panel metadata, behavioural tests.
+- [x] DEV-009A Existing supplier maintenance after panel-field changes, using two edit methods.
+  - Method 1: click Supplier ID/name to open the normal supplier edit screen with the current panel field schema.
+  - Method 2: "Edit supplier data" opens a spreadsheet-style grid where fixed fields are read-only and only custom fields are editable.
+  - Evidence: `supplier_bulk_edit` route, `supplier_bulk_edit.html`, clickable supplier links, automatic display of newly-added custom fields, bulk-change audit entries and behavioural tests.
 - [x] DEV-010 Reversible panel archive lifecycle with explicit confirmation and restore.
   - Evidence: SQLite `archived_at` migration, archive/restore routes, archived portfolio filter, lifecycle audit entries and behavioural tests.
 - [x] DEV-011 MDF master-data administration screen with SQLite-backed reference data.
