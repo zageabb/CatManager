@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Import panel{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('portfolio') }}">Category panel</a><span>›</span><span>Import panel</span>{% endblock %}
+{% block content %}<div class="page-title-row"><div><h1>Import panel JSON</h1><p class="subtitle">Imports schema versions 1–3 and migrates older payloads to the current schema.</p></div></div>
+<form method="post" enctype="multipart/form-data" class="form-card">
+<h2>Panel file</h2><div class="form-grid"><label>JSON file *<input type="file" name="panel_file" accept=".json,application/json" required></label><label class="required-toggle"><input type="checkbox" name="replace_existing" value="1"> Replace existing panel with the same Panel ID</label></div>
+<div class="form-actions"><a class="btn" href="{{ url_for('portfolio') }}">Cancel</a><button class="btn primary" type="submit">Import Panel</button></div></form>{% endblock %}
