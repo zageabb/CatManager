@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if panel else 'Create' }} panel{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('portfolio') }}">Category panel</a><span>›</span><span>{{ 'Edit panel' if panel else 'Create panel' }}</span>{% endblock %}
+{% block content %}<div class="page-title-row"><div><h1>{{ 'Edit panel' if panel else 'Create panel' }}</h1><p class="subtitle">Define the panel and the supplier data captured within it.</p></div></div>
+<form method="post" class="form-card" id="panel-form">{% set p = panel if panel else {} %}<h2>Panel details</h2><div class="form-grid">
+<label>Panel ID *<input name="panel_id" required value="{{ p.get('panel_id','') }}" {{ 'readonly' if panel }} placeholder="CMP0001"></label>
+<label>Panel Name *<input name="panel_name" required value="{{ p.get('panel_name','') }}"></label>
+<label>Category *<select name="category" required>{% for x in categories %}<option {{ 'selected' if p.get('category')==x }}>{{ x }}</option>{% endfor %}</select></label>
+<label>Business *<select name="business" required>{% for x in businesses %}<option {{ 'selected' if p.get('business')==x }}>{{ x }}</option>{% endfor %}</select></label>
+<label>Region level *<select name="region_level" required>{% for x in region_levels %}<option {{ 'selected' if p.get('region_level')==x }}>{{ x }}</option>{% endfor %}</select></label>
+<label>Region value<input name="region_value" value="{{ p.get('region_value','') }}" placeholder="e.g. Europe / UK / Global"></label>
+<label>Panel Owner *<input name="owner" required value="{{ p.get('owner','') }}"></label>
+<label>MDF Code *<select name="mdf_code" required>{% for m in mdf_codes %}<option value="{{ m.code }}" {{ 'selected' if p.get('mdf_code')==m.code }}>{{ m.code }} — {{ m.description }}</option>{% endfor %}</select></label>
+</div><div class="section-heading"><div><h2>Supplier data definition</h2><p>Fixed fields are always present. Add and reorder panel-specific custom fields below.</p></div><button class="btn" type="button" id="add-field">+ Add custom field</button></div>
+<div class="field-list">{% for fixed in ['Supplier ID','Supplier Name','Address','Post Code'] %}<div class="field-row fixed"><span class="drag">☰</span><strong>{{ fixed }}</strong><span class="field-type">Fixed</span></div>{% endfor %}<div id="custom-fields"></div></div>
+<input type="hidden" id="fields-json" name="fields_json" value="{{ fields|tojson|forceescape }}"><div class="form-actions"><a class="btn" href="{{ url_for('portfolio') }}">Cancel</a><button class="btn primary" type="submit">Save Panel</button></div></form>{% endblock %}
