@@ -839,6 +839,20 @@ def create_app(test_config=None):
     @app.route("/settings/dashboard", methods=["GET","POST"])
     def dashboard_settings():
         config = get_dashboard_config()
+        known_fields = {}
+        for row in get_db().execute("SELECT data_json FROM panels").fetchall():
+            try:
+                for field in json.loads(row["data_json"]).get("panel",{}).get("supplierFields",[]):
+                    fid = str(field.get("fieldId") or "").strip()
+                    if fid:
+                        known_fields[fid] = {
+                            "fieldId": fid,
+                            "fieldName": field.get("fieldName") or fid,
+                            "type": field.get("type") or "text",
+                        }
+            except (json.JSONDecodeError, TypeError):
+                pass
+        known_fields = sorted(known_fields.values(), key=lambda x:(x["fieldName"].lower(), x["fieldId"].lower()))
         if request.method == "POST":
             base_currency = request.form.get("base_currency","GBP").strip().upper() or "GBP"
             spend_field_id = request.form.get("spend_field_id","annual_spend").strip() or "annual_spend"
@@ -858,7 +872,7 @@ def create_app(test_config=None):
                 rates.setdefault(base_currency, 1.0)
             except (ValueError, TypeError):
                 flash("Currency rates must use one CODE=rate entry per line, for example EUR=0.86.","error")
-                return render_template("dashboard_settings.html",config=config),400
+                return render_template("dashboard_settings.html",config=config,known_fields=known_fields),400
             config = {
                 "baseCurrency": base_currency,
                 "spendFieldId": spend_field_id,
@@ -871,7 +885,7 @@ def create_app(test_config=None):
             save_dashboard_config(config)
             flash("Dashboard calculation settings updated.","success")
             return redirect(url_for("dashboard_settings"))
-        return render_template("dashboard_settings.html",config=config)
+        return render_template("dashboard_settings.html",config=config,known_fields=known_fields)
 
     @app.route("/settings/suppliers", methods=["GET","POST"])
     def supplier_master_settings():
