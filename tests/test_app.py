@@ -808,3 +808,15 @@ def test_portfolio_panel_qualification_falls_back_to_in_review_then_qualified(cl
         })
     page=client.get("/?q=Qualification+Demo+Two")
     assert b"In review" in page.data
+
+
+def test_settings_hub_is_accessible_from_header(client):
+    home=client.get("/")
+    assert home.status_code==200
+    assert b'href="/settings"' in home.data
+    settings=client.get("/settings")
+    assert settings.status_code==200
+    assert b"Dashboard calculations" in settings.data
+    assert b"Supplier master" in settings.data
+    assert b"MDF master data" in settings.data
+    assert b"Panel import" in settings.data
