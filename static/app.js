@@ -110,6 +110,73 @@
     refresh();
   }
 
+  const supplierPicker=document.querySelector("[data-supplier-master-picker]");
+  if(supplierPicker){
+    const search=supplierPicker.querySelector(".supplier-master-search");
+    const results=supplierPicker.querySelector(".supplier-master-results");
+    const form=supplierPicker.closest("form");
+    const idInput=form.querySelector('[name="supplier_id"]');
+    const nameInput=form.querySelector('[name="supplier_name"]');
+    const addressInput=form.querySelector('[name="address"]');
+    const postInput=form.querySelector('[name="post_code"]');
+    let timer=null;
+    let controller=null;
+
+    function hideResults(){results.hidden=true;results.innerHTML="";}
+    function chooseSupplier(item){
+      idInput.value=item.bpid||"";
+      nameInput.value=item.supplier_name||"";
+      addressInput.value=item.address||"";
+      postInput.value=item.post_code||"";
+      search.value=(item.bpid||"")+" — "+(item.supplier_name||"");
+      hideResults();
+      nameInput.focus();
+    }
+    function renderSupplierResults(items){
+      results.innerHTML="";
+      if(!items.length){
+        const empty=document.createElement("div");
+        empty.className="supplier-result-empty";
+        empty.textContent="No active master suppliers found.";
+        results.appendChild(empty);
+        results.hidden=false;
+        return;
+      }
+      items.forEach(function(item){
+        const btn=document.createElement("button");
+        btn.type="button";
+        btn.className="supplier-result";
+        btn.innerHTML='<strong>'+esc(item.bpid)+'</strong><span>'+esc(item.supplier_name)+'</span><small>'+esc(item.address||"")+'</small>';
+        btn.addEventListener("click",function(){chooseSupplier(item);});
+        results.appendChild(btn);
+      });
+      results.hidden=false;
+    }
+    async function runSupplierSearch(){
+      const q=search.value.trim();
+      if(q.length<2){hideResults();return;}
+      if(controller)controller.abort();
+      controller=new AbortController();
+      try{
+        const response=await fetch("/api/supplier-master/search?q="+encodeURIComponent(q),{signal:controller.signal});
+        if(!response.ok)throw new Error("search failed");
+        renderSupplierResults(await response.json());
+      }catch(e){
+        if(e.name!=="AbortError")hideResults();
+      }
+    }
+    search.addEventListener("input",function(){
+      clearTimeout(timer);
+      timer=setTimeout(runSupplierSearch,180);
+    });
+    search.addEventListener("keydown",function(e){
+      if(e.key==="Escape")hideResults();
+    });
+    document.addEventListener("click",function(e){
+      if(!supplierPicker.contains(e.target))hideResults();
+    });
+  }
+
   document.querySelectorAll("[data-copy]").forEach(function(btn){
     btn.addEventListener("click",async function(){const el=document.querySelector(btn.dataset.copy);if(!el)return;await navigator.clipboard.writeText(el.value||el.textContent||"");const old=btn.textContent;btn.textContent="Copied";setTimeout(function(){btn.textContent=old;},1200);});
   });
