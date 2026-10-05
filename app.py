@@ -69,7 +69,7 @@ def create_app(test_config=None):
 
     def build_panel_payload(panel_id, panel_name, category, business, region_level, region_value, owner, mdf_code, fields, suppliers, created_at=None):
         return {
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "panel": {
                 "panelId": panel_id,
                 "panelName": panel_name,
@@ -80,7 +80,7 @@ def create_app(test_config=None):
                 "mdfCode": mdf_code,
                 "supplierFields": fields,
                 "suppliers": suppliers,
-                "metadata": {"createdAt": created_at or now_iso(), "updatedAt": now_iso(), "version": 1},
+                "metadata": {"createdAt": created_at or now_iso(), "updatedAt": now_iso(), "version": 2, "auditTrail": []},
             },
         }
 
@@ -251,6 +251,32 @@ def create_app(test_config=None):
         flash("Panel saved.","success")
         return redirect(url_for("panel_view",panel_id=panel_id))
 
+    def find_supplier(panel, supplier_id):
+        for supplier in panel["data"]["panel"].get("suppliers", []):
+            if supplier.get("supplierId") == supplier_id:
+                return supplier
+        return None
+
+    def append_audit(data, action, supplier_id, details=None):
+        data["schemaVersion"] = max(int(data.get("schemaVersion", 1)), 2)
+        metadata = data["panel"].setdefault("metadata", {})
+        metadata["version"] = max(int(metadata.get("version", 1)), 2)
+        metadata["updatedAt"] = now_iso()
+        trail = metadata.setdefault("auditTrail", [])
+        trail.append({
+            "timestamp": now_iso(),
+            "action": action,
+            "supplierId": supplier_id,
+            "details": details or {},
+        })
+
+    def save_panel_data(panel, data):
+        get_db().execute(
+            "UPDATE panels SET data_json=?,updated_at=? WHERE id=?",
+            (json.dumps(data), now_iso(), panel["id"]),
+        )
+        get_db().commit()
+
     @app.route("/panels/<panel_id>")
     def panel_view(panel_id):
         return render_template("panel_view.html",panel=get_panel_or_404(panel_id))
@@ -275,12 +301,63 @@ def create_app(test_config=None):
                         return render_template("supplier_form.html",panel=panel),400
                 custom[field["fieldId"]] = value
             suppliers.append({"supplierId":supplier_id,"supplierName":request.form.get("supplier_name","").strip(),"address":request.form.get("address","").strip(),"postCode":request.form.get("post_code","").strip(),"customFields":custom})
-            data["panel"]["metadata"]["updatedAt"] = now_iso()
-            get_db().execute("UPDATE panels SET data_json=?,updated_at=? WHERE id=?",(json.dumps(data),now_iso(),panel["id"]))
-            get_db().commit()
+            append_audit(data, "supplier_created", supplier_id, {"supplierName": request.form.get("supplier_name","").strip()})
+            save_panel_data(panel, data)
             flash("Supplier added.","success")
             return redirect(url_for("panel_view",panel_id=panel_id))
-        return render_template("supplier_form.html",panel=panel)
+        return render_template("supplier_form.html",panel=panel,supplier=None)
+
+    @app.route("/panels/<panel_id>/suppliers/<supplier_id>/edit", methods=["GET","POST"])
+    def supplier_edit(panel_id, supplier_id):
+        panel = get_panel_or_404(panel_id)
+        supplier = find_supplier(panel, supplier_id)
+        if supplier is None:
+            from flask import abort
+            abort(404)
+        if request.method == "POST":
+            data = panel["data"]
+            previous = json.loads(json.dumps(supplier))
+            new_name = request.form.get("supplier_name","").strip()
+            if not new_name:
+                flash("Supplier Name is required.","error")
+                return render_template("supplier_form.html",panel=panel,supplier=supplier),400
+            supplier["supplierName"] = new_name
+            supplier["address"] = request.form.get("address","").strip()
+            supplier["postCode"] = request.form.get("post_code","").strip()
+            custom = supplier.setdefault("customFields", {})
+            for field in data["panel"].get("supplierFields",[]):
+                value = request.form.get(f"custom_{field['fieldId']}","")
+                if field["type"] == "number" and value != "":
+                    try:
+                        value = float(value)
+                    except ValueError:
+                        flash(f"{field['fieldName']} must be numeric.","error")
+                        return render_template("supplier_form.html",panel=panel,supplier=previous),400
+                custom[field["fieldId"]] = value
+            append_audit(data, "supplier_updated", supplier_id, {"before": previous, "after": json.loads(json.dumps(supplier))})
+            save_panel_data(panel, data)
+            flash("Supplier updated.","success")
+            return redirect(url_for("panel_view",panel_id=panel_id))
+        return render_template("supplier_form.html",panel=panel,supplier=supplier)
+
+    @app.route("/panels/<panel_id>/suppliers/<supplier_id>/delete", methods=["POST"])
+    def supplier_delete(panel_id, supplier_id):
+        panel = get_panel_or_404(panel_id)
+        data = panel["data"]
+        supplier = find_supplier(panel, supplier_id)
+        if supplier is None:
+            from flask import abort
+            abort(404)
+        confirmation = request.form.get("confirm_supplier_id","").strip()
+        if confirmation != supplier_id:
+            flash("Supplier was not deleted: confirmation did not match the Supplier ID.","error")
+            return redirect(url_for("panel_view",panel_id=panel_id))
+        snapshot = json.loads(json.dumps(supplier))
+        data["panel"]["suppliers"] = [s for s in data["panel"].get("suppliers",[]) if s.get("supplierId") != supplier_id]
+        append_audit(data, "supplier_deleted", supplier_id, {"snapshot": snapshot})
+        save_panel_data(panel, data)
+        flash(f"Supplier {supplier_id} deleted. A recovery snapshot was retained in the panel audit trail.","success")
+        return redirect(url_for("panel_view",panel_id=panel_id))
 
     @app.route("/panels/<panel_id>/data", methods=["GET","POST"])
     def panel_data(panel_id):
