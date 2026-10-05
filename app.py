@@ -1255,6 +1255,16 @@ def create_app(test_config=None):
             query=request.args.get("q","").strip(),
         )
 
+    @app.route("/settings")
+    def settings_home():
+        supplier_total = get_db().execute("SELECT COUNT(*) FROM supplier_master WHERE active=1").fetchone()[0]
+        mdf_total = get_db().execute("SELECT COUNT(*) FROM mdf_codes WHERE active=1").fetchone()[0]
+        return render_template(
+            "settings_home.html",
+            supplier_total=supplier_total,
+            mdf_total=mdf_total,
+        )
+
     @app.route("/settings/dashboard", methods=["GET","POST"])
     def dashboard_settings():
         config = get_dashboard_config()
