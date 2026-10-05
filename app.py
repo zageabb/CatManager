@@ -97,6 +97,11 @@ def create_app(test_config=None):
             updated_at TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_supplier_master_name ON supplier_master(supplier_name);
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         """)
         columns = {row[1] for row in db.execute("PRAGMA table_info(panels)").fetchall()}
         if "archived_at" not in columns:
@@ -314,6 +319,75 @@ def create_app(test_config=None):
         params.extend([exact, prefix, prefix, int(limit)])
         return [dict(row) for row in get_db().execute(sql, params).fetchall()]
 
+
+    DEFAULT_DASHBOARD_CONFIG = {
+        "baseCurrency": "GBP",
+        "spendFieldId": "annual_spend",
+        "currencyFieldId": "spend_currency",
+        "qualificationFieldId": "qualification_status",
+        "qualificationReviewFieldId": "qualification_review_date",
+        "classificationFieldId": "classification",
+        "currencyRates": {"GBP": 1.0, "EUR": 0.86, "USD": 0.78},
+    }
+
+    def get_dashboard_config():
+        row = get_db().execute("SELECT value FROM app_settings WHERE key='dashboard_config'").fetchone()
+        if row is None:
+            return json.loads(json.dumps(DEFAULT_DASHBOARD_CONFIG))
+        try:
+            loaded = json.loads(row["value"])
+        except (json.JSONDecodeError, TypeError):
+            return json.loads(json.dumps(DEFAULT_DASHBOARD_CONFIG))
+        config = json.loads(json.dumps(DEFAULT_DASHBOARD_CONFIG))
+        config.update({k:v for k,v in loaded.items() if k in config})
+        rates = loaded.get("currencyRates")
+        if isinstance(rates, dict):
+            clean_rates = {}
+            for code, rate in rates.items():
+                try:
+                    clean_rates[str(code).upper()] = float(rate)
+                except (TypeError, ValueError):
+                    continue
+            if clean_rates:
+                config["currencyRates"] = clean_rates
+        config["baseCurrency"] = str(config.get("baseCurrency") or "GBP").upper()
+        config["currencyRates"].setdefault(config["baseCurrency"], 1.0)
+        return config
+
+    def save_dashboard_config(config):
+        get_db().execute(
+            """INSERT INTO app_settings(key,value,updated_at) VALUES('dashboard_config',?,?)
+               ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at""",
+            (json.dumps(config), now_iso()),
+        )
+        get_db().commit()
+
+    def convert_spend(amount, currency, config):
+        try:
+            amount = float(amount)
+        except (TypeError, ValueError):
+            return None
+        currency = str(currency or config["baseCurrency"]).upper()
+        rate = config["currencyRates"].get(currency)
+        if rate is None:
+            return None
+        return amount * float(rate)
+
+    def qualification_review_bucket(value):
+        if not value:
+            return "missing"
+        try:
+            review_date = datetime.fromisoformat(str(value)).date()
+        except (TypeError, ValueError):
+            return "invalid"
+        today = datetime.now(timezone.utc).date()
+        days = (review_date - today).days
+        if days < 0:
+            return "overdue"
+        if days <= 30:
+            return "due_30"
+        return "future"
+
     @app.context_processor
     def inject_globals():
         return dict(categories=CATEGORIES,businesses=BUSINESSES,region_levels=REGION_LEVELS,mdf_codes=get_mdf_codes())
@@ -400,22 +474,44 @@ def create_app(test_config=None):
         start = (page - 1) * page_size
         panels = panels[start:start + page_size]
 
+        config = get_dashboard_config()
         supplier_count = 0
+        supplier_occurrences = {}
         spend_by_category = {}
-        qualifications = {"In review":0,"Qualified":0,"Not qualified":0}
-        classifications = {"Standard":0,"Preferred":0,"Critical":0}
+        unconverted_spend = {}
+        qualifications = {}
+        classifications = {}
+        qualification_reviews = {"overdue":0,"due_30":0,"future":0,"missing":0,"invalid":0}
         for p in all_panels:
             if p.get("archived_at"):
                 continue
             suppliers = p["data"]["panel"].get("suppliers",[])
             supplier_count += len(suppliers)
             for supplier in suppliers:
+                supplier_name = supplier.get("supplierName") or supplier.get("supplierId") or "Unknown"
+                supplier_occurrences[supplier_name] = supplier_occurrences.get(supplier_name,0) + 1
                 custom = supplier.get("customFields",{})
-                spend_by_category[p["category"]] = spend_by_category.get(p["category"],0) + float(custom.get("annual_spend") or 0)
-                q, c = custom.get("qualification_status"), custom.get("classification")
-                if q in qualifications: qualifications[q] += 1
-                if c in classifications: classifications[c] += 1
+                amount = custom.get(config["spendFieldId"])
+                currency = custom.get(config["currencyFieldId"]) or config["baseCurrency"]
+                converted = convert_spend(amount, currency, config)
+                if converted is not None:
+                    spend_by_category[p["category"]] = spend_by_category.get(p["category"],0) + converted
+                elif amount not in (None,""):
+                    code = str(currency or config["baseCurrency"]).upper()
+                    try:
+                        unconverted_spend[code] = unconverted_spend.get(code,0) + float(amount)
+                    except (TypeError, ValueError):
+                        pass
+                q = custom.get(config["qualificationFieldId"])
+                c = custom.get(config["classificationFieldId"])
+                if q:
+                    qualifications[q] = qualifications.get(q,0) + 1
+                if c:
+                    classifications[c] = classifications.get(c,0) + 1
+                bucket = qualification_review_bucket(custom.get(config["qualificationReviewFieldId"]))
+                qualification_reviews[bucket] += 1
         top_spend = sorted(spend_by_category.items(), key=lambda x:x[1], reverse=True)[:4]
+        top_suppliers = sorted(supplier_occurrences.items(), key=lambda x:(-x[1], x[0].lower()))[:5]
         active_total = sum(1 for p in all_panels if not p.get("archived_at"))
         archived_total = len(all_panels) - active_total
         favourite_total = sum(1 for p in all_panels if p.get("is_favourite") and not p.get("archived_at"))
@@ -426,7 +522,11 @@ def create_app(test_config=None):
             filtered_total=filtered_total,
             supplier_count=supplier_count,
             top_spend=top_spend,
+            top_suppliers=top_suppliers,
+            dashboard_config=config,
+            unconverted_spend=unconverted_spend,
             qualifications=qualifications,
+            qualification_reviews=qualification_reviews,
             classifications=classifications,
             show_archived=show_archived,
             favourites_only=favourites_only,
@@ -732,6 +832,43 @@ def create_app(test_config=None):
             flash("Panel JSON updated.","success")
             return redirect(url_for("panel_data",panel_id=panel_id))
         return render_template("data_settings.html",panel=panel,raw_json=json.dumps(panel["data"],indent=2))
+
+    @app.route("/settings/dashboard", methods=["GET","POST"])
+    def dashboard_settings():
+        config = get_dashboard_config()
+        if request.method == "POST":
+            base_currency = request.form.get("base_currency","GBP").strip().upper() or "GBP"
+            spend_field_id = request.form.get("spend_field_id","annual_spend").strip() or "annual_spend"
+            currency_field_id = request.form.get("currency_field_id","spend_currency").strip() or "spend_currency"
+            qualification_field_id = request.form.get("qualification_field_id","qualification_status").strip() or "qualification_status"
+            qualification_review_field_id = request.form.get("qualification_review_field_id","qualification_review_date").strip() or "qualification_review_date"
+            classification_field_id = request.form.get("classification_field_id","classification").strip() or "classification"
+            raw_rates = request.form.get("currency_rates","").strip()
+            rates = {}
+            try:
+                for raw_line in raw_rates.splitlines():
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+                    code, value = [part.strip() for part in line.split("=",1)]
+                    rates[code.upper()] = float(value)
+                rates.setdefault(base_currency, 1.0)
+            except (ValueError, TypeError):
+                flash("Currency rates must use one CODE=rate entry per line, for example EUR=0.86.","error")
+                return render_template("dashboard_settings.html",config=config),400
+            config = {
+                "baseCurrency": base_currency,
+                "spendFieldId": spend_field_id,
+                "currencyFieldId": currency_field_id,
+                "qualificationFieldId": qualification_field_id,
+                "qualificationReviewFieldId": qualification_review_field_id,
+                "classificationFieldId": classification_field_id,
+                "currencyRates": rates,
+            }
+            save_dashboard_config(config)
+            flash("Dashboard calculation settings updated.","success")
+            return redirect(url_for("dashboard_settings"))
+        return render_template("dashboard_settings.html",config=config)
 
     @app.route("/settings/suppliers", methods=["GET","POST"])
     def supplier_master_settings():
