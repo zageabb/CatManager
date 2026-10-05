@@ -32,7 +32,8 @@ An item is complete only when the source is present, relevant tests pass, and CI
   - Evidence: supplied MDF catalogue loaded from `data/mdf_codes.json`; panel create/edit uses a compact searchable multi-select dropdown with selected chips; Lead MDF dropdown is restricted to selected MDFs.
 - [x] DEV-012 Portfolio favourites, sorting, pagination and persistent filters.
   - Evidence: persistent SQLite favourite flag and toggle route; Favourites portfolio tab; sortable portfolio headers; configurable 10/20/50/100 row pagination; session-backed search/category/business/sort/page-size persistence with Reset; behavioural tests.
-- [ ] DEV-013 True dashboard calculations including configurable spend/currency semantics and qualification review dates.
+- [x] DEV-013 True dashboard calculations with configurable spend/currency semantics and qualification review dates.
+  - Evidence: `/settings/dashboard` maps supplier field IDs to dashboard meanings; configurable base currency and manual conversion rates; active-panel spend is converted before aggregation while unknown currencies are surfaced separately; top suppliers are calculated from live records; qualification status is dynamic; qualification review dates are bucketed into overdue, due within 30 days, future, missing/invalid; portfolio row spend uses the configured base currency; behavioural tests.
 - [ ] DEV-014 Field deletion impact preview when supplier data exists; preserve orphan data until explicit migration.
 - [ ] DEV-015 Import/export JSON file actions and schema-version migration.
 - [ ] DEV-016 Audit log for panel schema and supplier changes.
