@@ -1,4 +1,5 @@
 import io
+from datetime import datetime, timedelta, timezone
 import json
 import pytest
 from app import create_app
@@ -400,3 +401,80 @@ def test_supplier_form_contains_master_typeahead(client):
     assert page.status_code == 200
     assert b"Find supplier by BPID or name" in page.data
     assert b"supplier-master-search" in page.data
+
+
+def test_dashboard_uses_configured_currency_and_review_semantics(client):
+    fields = [
+        {"fieldId":"annual_spend","fieldName":"Annual Spend","type":"number","required":False,"options":[]},
+        {"fieldId":"spend_currency","fieldName":"Spend Currency","type":"dropdown","required":False,"options":["GBP","EUR","USD"]},
+        {"fieldId":"qualification_status","fieldName":"Qualification Status","type":"dropdown","required":False,"options":["Qualified","In review"]},
+        {"fieldId":"qualification_review_date","fieldName":"Qualification Review Date","type":"date","required":False,"options":[]},
+        {"fieldId":"classification","fieldName":"Classification","type":"dropdown","required":False,"options":["Preferred","Standard"]},
+    ]
+    response=client.post("/panels/new", data={
+        "panel_id":"CMP5000",
+        "panel_name":"Dashboard Panel",
+        "category":"Transformers",
+        "business":"GI",
+        "region_level":"Global",
+        "region_value":"Global",
+        "owner":"Owner",
+        "mdf_codes":["MDF-TR-001"],
+        "lead_mdf_code":"MDF-TR-001",
+        "fields_json":json.dumps(fields),
+    })
+    assert response.status_code==302
+
+    today=datetime.now(timezone.utc).date()
+    suppliers=[
+        ("SUP-D1","Alpha Supplier","1000000","GBP","Qualified",(today-timedelta(days=1)).isoformat(),"Preferred"),
+        ("SUP-D2","Alpha Supplier","2000000","EUR","In review",(today+timedelta(days=10)).isoformat(),"Standard"),
+        ("SUP-D3","Gamma Supplier","3000000","USD","Qualified","", "Preferred"),
+    ]
+    for sid,name,spend,currency,qual,review,classification in suppliers:
+        response=client.post("/panels/CMP5000/suppliers/new", data={
+            "supplier_id":sid,
+            "supplier_name":name,
+            "address":"Road",
+            "post_code":"AA1 1AA",
+            "custom_annual_spend":spend,
+            "custom_spend_currency":currency,
+            "custom_qualification_status":qual,
+            "custom_qualification_review_date":review,
+            "custom_classification":classification,
+        })
+        assert response.status_code==302
+
+    settings=client.post("/settings/dashboard", data={
+        "base_currency":"GBP",
+        "spend_field_id":"annual_spend",
+        "currency_field_id":"spend_currency",
+        "qualification_field_id":"qualification_status",
+        "qualification_review_field_id":"qualification_review_date",
+        "classification_field_id":"classification",
+        "currency_rates":"GBP=1\nEUR=0.5",
+    })
+    assert settings.status_code==302
+
+    page=client.get("/")
+    assert page.status_code==200
+    assert b"GBP 2.0M" in page.data
+    assert b"USD 3,000,000" in page.data
+    assert b"Alpha Supplier" in page.data
+    assert b"2</strong>" in page.data
+    assert b"1 overdue" in page.data
+    assert b"Due in 30 days" in page.data
+    assert b"No review date" in page.data
+
+def test_dashboard_settings_reject_invalid_currency_rates(client):
+    response=client.post("/settings/dashboard", data={
+        "base_currency":"GBP",
+        "spend_field_id":"annual_spend",
+        "currency_field_id":"spend_currency",
+        "qualification_field_id":"qualification_status",
+        "qualification_review_field_id":"qualification_review_date",
+        "classification_field_id":"classification",
+        "currency_rates":"GBP=1\nEUR=not-a-number",
+    })
+    assert response.status_code==400
+    assert b"Currency rates must use" in response.data
