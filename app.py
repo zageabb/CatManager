@@ -511,6 +511,27 @@ def create_app(test_config=None):
             return None
         return amount * float(rate)
 
+    def panel_qualification_status(suppliers, field_id):
+        statuses = []
+        for supplier in suppliers:
+            value = str(supplier.get("customFields",{}).get(field_id) or "").strip()
+            if value:
+                statuses.append(value)
+        if not statuses:
+            return "No data"
+
+        def severity(value):
+            normalized = value.strip().lower()
+            if normalized in {"not qualified", "unqualified", "rejected", "failed"}:
+                return 3
+            if normalized in {"in review", "under review", "pending", "conditional"}:
+                return 2
+            if normalized in {"qualified", "approved"}:
+                return 1
+            return 2
+
+        return max(statuses, key=severity)
+
     def qualification_review_bucket(value):
         if not value:
             return "missing"
@@ -651,6 +672,10 @@ def create_app(test_config=None):
                 bucket = qualification_review_bucket(custom.get(config["qualificationReviewFieldId"]))
                 qualification_reviews[bucket] += 1
             p["dashboard_spend"] = panel_spend
+            p["panel_qualification"] = panel_qualification_status(
+                suppliers,
+                config["qualificationFieldId"],
+            )
         top_spend = sorted(spend_by_category.items(), key=lambda x:x[1], reverse=True)[:4]
         top_suppliers = sorted(supplier_occurrences.items(), key=lambda x:(-x[1], x[0].lower()))[:5]
         active_total = sum(1 for p in all_panels if not p.get("archived_at"))
