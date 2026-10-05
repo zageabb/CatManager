@@ -21,3 +21,5 @@
 
 .audit-list{display:flex;flex-direction:column;gap:10px;padding:14px}.audit-event{border:1px solid var(--line);border-radius:8px;background:#fff;padding:12px}.audit-event-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.audit-event-head>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.audit-event-head time{font-size:12px;color:var(--muted);white-space:nowrap}.audit-meta{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;color:var(--muted);font-size:11px}.audit-event details{margin-top:10px}.audit-event summary{cursor:pointer;color:#6b7378;font-size:12px;font-weight:600}.audit-event pre{overflow:auto;max-height:380px;margin:8px 0 0;padding:10px;border-radius:7px;background:#f7f8f9;border:1px solid #eceeef;font-size:11px;line-height:1.45}.audit-event .id-chip{font-size:10px}
 @media(max-width:720px){.audit-event-head{flex-direction:column}.audit-event-head time{white-space:normal}}
+
+.qualification-qualified{background:#e7f5ec;color:#277445}.qualification-in-review{background:#fff4d7;color:#8b6612}.qualification-not-qualified{background:#fde8ea;color:#a53a46}.qualification-no-data{background:#eef1f3;color:#697278}
