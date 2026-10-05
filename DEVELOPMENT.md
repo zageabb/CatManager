@@ -9,7 +9,8 @@ An item is complete only when the source is present, relevant tests pass, and CI
 ## V1 — Foundation and usable panel workflow
 - [x] DEV-001 Flask application factory and SQLite storage.
 - [x] DEV-002 Taiju-style Category Panel portfolio based on the supplied mock-up.
-- [x] DEV-003 Panel create/edit with controlled Category, Business, Region level and MDF selection.
+- [x] DEV-003 Panel create/edit with controlled Category, Business, Region level and multi-MDF selection with one Lead MDF.
+  - Evidence: panel form supports multiple MDF selections; canonical JSON stores `mdfCodes` plus `leadMdfCode`; legacy `mdfCode` remains the lead for compatibility.
 - [x] DEV-004 User-defined supplier fields: Number, Text, Dropdown and Date.
 - [x] DEV-005 Panel view with fixed supplier fields followed by custom fields.
 - [x] DEV-006 Supplier add form generated dynamically from panel field definitions.
@@ -38,4 +39,4 @@ An item is complete only when the source is present, relevant tests pass, and CI
 2. Custom values are keyed by immutable fieldId, never display label.
 3. Region is represented by level and value.
 4. Panel IDs are immutable from the raw JSON editor.
-5. Schema version 2 adds append-only metadata audit and reversible lifecycle metadata. Supplier delete retains a full recovery snapshot; panel removal is implemented as archive/restore rather than destructive deletion.
+5. Schema version 3 adds multi-MDF panels (`mdfCodes` + `leadMdfCode`) while retaining legacy `mdfCode` as the lead MDF for compatibility. Append-only audit and reversible lifecycle metadata continue from version 2.
