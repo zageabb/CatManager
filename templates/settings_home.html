@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block breadcrumb %}<span>Settings</span>{% endblock %}
+{% block content %}
+<div class="page-title-row">
+  <div>
+    <h1>Settings</h1>
+    <p class="subtitle">Administration and calculation settings for CatManager.</p>
+  </div>
+</div>
+<section class="settings-grid">
+  <a class="settings-card" href="{{ url_for('dashboard_settings') }}">
+    <div class="settings-card-icon">◫</div>
+    <div>
+      <h2>Dashboard calculations</h2>
+      <p>Configure spend, currency, qualification, review dates and classification field mappings.</p>
+    </div>
+    <span class="settings-card-arrow">›</span>
+  </a>
+  <a class="settings-card" href="{{ url_for('supplier_master_settings') }}">
+    <div class="settings-card-icon">⌘</div>
+    <div>
+      <h2>Supplier master</h2>
+      <p>Import, search, remove and restore master suppliers.</p>
+      <small>{{ supplier_total }} active suppliers</small>
+    </div>
+    <span class="settings-card-arrow">›</span>
+  </a>
+  <a class="settings-card" href="{{ url_for('mdf_settings') }}">
+    <div class="settings-card-icon">M</div>
+    <div>
+      <h2>MDF master data</h2>
+      <p>Maintain available MDF codes and descriptions used by category panels.</p>
+      <small>{{ mdf_total }} active MDF codes</small>
+    </div>
+    <span class="settings-card-arrow">›</span>
+  </a>
+  <a class="settings-card" href="{{ url_for('panel_import') }}">
+    <div class="settings-card-icon">⇩</div>
+    <div>
+      <h2>Panel import</h2>
+      <p>Import a panel JSON file and migrate older supported schema versions.</p>
+    </div>
+    <span class="settings-card-arrow">›</span>
+  </a>
+</section>
+{% endblock %}
