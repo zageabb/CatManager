@@ -9,7 +9,20 @@ from uuid import uuid4
 
 from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
 
-CATEGORIES = ["Transformers", "Switchgear", "Current Transformers", "Civil Engineering"]
+from legacy_demo_data import LEGACY_DEMO_PANELS, LEGACY_MDF_CODES
+
+CATEGORIES = [
+    "Transformers",
+    "Switchgear",
+    "Current Transformers",
+    "Civil Engineering",
+    "Cables & Conductors",
+    "Protection & Control",
+    "Electrical Equipment",
+    "Mechanical Components",
+    "Services",
+    "General Equipment",
+]
 BUSINESSES = ["GI", "GA", "GPQSS", "HVDC"]
 REGION_LEVELS = ["Global", "Region", "HUB", "Country"]
 FIELD_TYPES = ["number", "text", "dropdown", "date"]
@@ -161,39 +174,61 @@ def create_app(test_config=None):
         }
 
     def seed_demo(db):
-        examples = [
-            ("CMP0261", "Global Transformers", "Transformers", "GI", "Global", "Global", "John Smith", "3GF", 100),
-            ("CMP0825", "Europe Switchgear", "Switchgear", "GPQSS", "Region", "Europe", "Alice Brown", "3GF", 40),
-            ("CMP0482", "APAC Disconnectors", "Switchgear", "GI", "Region", "APAC", "David Lee", "3GF", 1),
-            ("CMP0430", "Global Transformer Services", "Transformers", "GPQSS", "Global", "Global", "Emily Wilson", "3GF", 8),
-            ("CMP0751", "Europe Transformers", "Transformers", "GI", "Region", "Europe", "Michael Garcia", "3GF", 15),
-            ("CMP0639", "APAC Transformers", "Transformers", "GPQSS", "Region", "APAC", "Sophia Rodriguez", "3GF", 100),
-        ]
-        for idx, row in enumerate(examples):
-            panel_id, name, cat, business, level, value, owner, mdf, spend = row
-            fields = [
-                {"fieldId":"classification","fieldName":"Classification","type":"dropdown","options":["Standard","Preferred","Critical"],"required":False,"order":1},
-                {"fieldId":"qualification_status","fieldName":"Qualification Status","type":"dropdown","options":["In review","Qualified","Not qualified"],"required":False,"order":2},
-                {"fieldId":"annual_spend","fieldName":"Annual Spend","type":"number","options":[],"required":False,"order":3},
-            ]
+        ts = now_iso()
+        for code, description in LEGACY_MDF_CODES.items():
+            db.execute(
+                """INSERT INTO mdf_codes(code,description,active,created_at,updated_at)
+                   VALUES(?,?,0,?,?)
+                   ON CONFLICT(code) DO NOTHING""",
+                (code, description, ts, ts),
+            )
+
+        for source in LEGACY_DEMO_PANELS:
             suppliers = []
-            for s in range(3 if idx < 3 else 2):
-                suppliers.append({
-                    "supplierId": f"SUP-{idx+1:02d}{s+1:03d}",
-                    "supplierName": ["ABB Systems","Schneider Electric","Hitachi Energy"][s % 3],
-                    "address": f"{10+s} Industrial Park",
-                    "postCode": "ST16 1AA",
-                    "customFields": {
-                        "classification": ["Standard","Preferred","Critical"][(idx+s) % 3],
-                        "qualification_status": ["Qualified","In review","Not qualified"][(idx+s) % 3],
-                        "annual_spend": spend * 1000000 / (s+1),
-                    },
-                })
-            payload = build_panel_payload(panel_id,name,cat,business,level,value,owner,[mdf],mdf,fields,suppliers)
-            ts = now_iso()
-            db.execute("""INSERT INTO panels(panel_id,panel_name,category,business,region_level,region_value,owner,mdf_code,data_json,created_at,updated_at)
-                          VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-                       (panel_id,name,cat,business,level,value,owner,mdf,json.dumps(payload),ts,ts))
+            for source_supplier in source.get("suppliers", []):
+                supplier = json.loads(json.dumps(source_supplier))
+                if not supplier.get("address"):
+                    supplier["address"], supplier["postCode"] = generic_supplier_address(supplier["supplierId"])
+                supplier.setdefault("postCode", "")
+                supplier.setdefault("masterLinked", False)
+                suppliers.append(supplier)
+
+            metadata = json.loads(json.dumps(source.get("metadata", {})))
+            metadata["createdAt"] = ts
+            payload = build_panel_payload(
+                source["panelId"],
+                source["panelName"],
+                source["category"],
+                source.get("business","GI"),
+                source["region"]["level"],
+                source["region"]["value"],
+                source["panelOwner"]["name"],
+                source["mdfCodes"],
+                source["leadMdfCode"],
+                source.get("supplierFields",[]),
+                suppliers,
+                ts,
+                metadata,
+            )
+            db.execute(
+                """INSERT INTO panels(
+                       panel_id,panel_name,category,business,region_level,region_value,
+                       owner,mdf_code,data_json,created_at,updated_at
+                   ) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    source["panelId"],
+                    source["panelName"],
+                    source["category"],
+                    source.get("business","GI"),
+                    source["region"]["level"],
+                    source["region"]["value"],
+                    source["panelOwner"]["name"],
+                    source["leadMdfCode"],
+                    json.dumps(payload),
+                    ts,
+                    ts,
+                ),
+            )
         db.commit()
 
     def row_to_panel(row):
