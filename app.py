@@ -80,12 +80,33 @@ def create_app(test_config=None):
                 [(m["code"], m["description"], 1, ts, ts) for m in DEFAULT_MDF_CODES],
             )
         db.commit()
+        rows = db.execute("SELECT id,mdf_code,data_json FROM panels").fetchall()
+        for row in rows:
+            try:
+                payload = json.loads(row["data_json"])
+                core = payload.get("panel", {})
+                if "mdfCodes" not in core:
+                    lead = core.get("leadMdfCode") or core.get("mdfCode") or row["mdf_code"]
+                    core["mdfCode"] = lead
+                    core["leadMdfCode"] = lead
+                    core["mdfCodes"] = [lead] if lead else []
+                    payload["schemaVersion"] = max(int(payload.get("schemaVersion", 1)), 3)
+                    core.setdefault("metadata", {})["version"] = max(int(core.get("metadata", {}).get("version", 1)), 3)
+                    db.execute("UPDATE panels SET data_json=? WHERE id=?", (json.dumps(payload), row["id"]))
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
+        db.commit()
         if app.config.get("SEED_DEMO") and db.execute("SELECT COUNT(*) FROM panels").fetchone()[0] == 0:
             seed_demo(db)
 
-    def build_panel_payload(panel_id, panel_name, category, business, region_level, region_value, owner, mdf_code, fields, suppliers, created_at=None):
+    def build_panel_payload(panel_id, panel_name, category, business, region_level, region_value, owner, mdf_codes, lead_mdf_code, fields, suppliers, created_at=None, metadata=None):
+        metadata = json.loads(json.dumps(metadata or {}))
+        metadata.setdefault("createdAt", created_at or now_iso())
+        metadata["updatedAt"] = now_iso()
+        metadata["version"] = max(int(metadata.get("version", 1)), 3)
+        metadata.setdefault("auditTrail", [])
         return {
-            "schemaVersion": 2,
+            "schemaVersion": 3,
             "panel": {
                 "panelId": panel_id,
                 "panelName": panel_name,
@@ -93,10 +114,12 @@ def create_app(test_config=None):
                 "business": business,
                 "region": {"level": region_level, "value": region_value},
                 "panelOwner": {"name": owner},
-                "mdfCode": mdf_code,
+                "mdfCode": lead_mdf_code,
+                "leadMdfCode": lead_mdf_code,
+                "mdfCodes": list(mdf_codes),
                 "supplierFields": fields,
                 "suppliers": suppliers,
-                "metadata": {"createdAt": created_at or now_iso(), "updatedAt": now_iso(), "version": 2, "auditTrail": []},
+                "metadata": metadata,
             },
         }
 
@@ -129,7 +152,7 @@ def create_app(test_config=None):
                         "annual_spend": spend * 1000000 / (s+1),
                     },
                 })
-            payload = build_panel_payload(panel_id,name,cat,business,level,value,owner,mdf,fields,suppliers)
+            payload = build_panel_payload(panel_id,name,cat,business,level,value,owner,[mdf],mdf,fields,suppliers)
             ts = now_iso()
             db.execute("""INSERT INTO panels(panel_id,panel_name,category,business,region_level,region_value,owner,mdf_code,data_json,created_at,updated_at)
                           VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
@@ -244,8 +267,9 @@ def create_app(test_config=None):
         region_level = request.form.get("region_level","")
         region_value = request.form.get("region_value","").strip()
         owner = request.form.get("owner","").strip()
-        mdf_code = request.form.get("mdf_code","")
-        if not all([panel_id,panel_name,category,business,region_level,owner,mdf_code]):
+        mdf_codes = [x for x in request.form.getlist("mdf_codes") if x]
+        lead_mdf_code = request.form.get("lead_mdf_code","").strip()
+        if not all([panel_id,panel_name,category,business,region_level,owner]) or not mdf_codes or not lead_mdf_code:
             flash("Complete all required panel fields.","error")
             return render_template("panel_form.html",panel=existing,fields=[]),400
         try:
@@ -256,21 +280,28 @@ def create_app(test_config=None):
         if category not in CATEGORIES or business not in BUSINESSES or region_level not in REGION_LEVELS:
             flash("One or more controlled values are invalid.","error")
             return render_template("panel_form.html",panel=existing,fields=fields),400
+        active_mdf = {m["code"] for m in get_mdf_codes()}
+        existing_mdf = set(existing["data"]["panel"].get("mdfCodes", [existing.get("mdf_code")]) if existing else [])
+        allowed_mdf = active_mdf | existing_mdf
+        if any(code not in allowed_mdf for code in mdf_codes) or lead_mdf_code not in mdf_codes:
+            flash("Select one or more valid MDF codes and choose the lead MDF from those selected.","error")
+            return render_template("panel_form.html",panel=existing,fields=fields),400
 
         db = get_db()
         suppliers = existing["data"]["panel"].get("suppliers",[]) if existing else []
         created_at = existing["created_at"] if existing else now_iso()
         value = region_value or region_level
-        payload = build_panel_payload(panel_id,panel_name,category,business,region_level,value,owner,mdf_code,fields,suppliers,created_at)
+        existing_metadata = existing["data"]["panel"].get("metadata", {}) if existing else None
+        payload = build_panel_payload(panel_id,panel_name,category,business,region_level,value,owner,mdf_codes,lead_mdf_code,fields,suppliers,created_at,existing_metadata)
         ts = now_iso()
         try:
             if existing:
                 db.execute("""UPDATE panels SET panel_name=?,category=?,business=?,region_level=?,region_value=?,owner=?,mdf_code=?,data_json=?,updated_at=? WHERE id=?""",
-                           (panel_name,category,business,region_level,value,owner,mdf_code,json.dumps(payload),ts,existing["id"]))
+                           (panel_name,category,business,region_level,value,owner,lead_mdf_code,json.dumps(payload),ts,existing["id"]))
             else:
                 db.execute("""INSERT INTO panels(panel_id,panel_name,category,business,region_level,region_value,owner,mdf_code,data_json,created_at,updated_at)
                               VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-                           (panel_id,panel_name,category,business,region_level,value,owner,mdf_code,json.dumps(payload),ts,ts))
+                           (panel_id,panel_name,category,business,region_level,value,owner,lead_mdf_code,json.dumps(payload),ts,ts))
             db.commit()
         except sqlite3.IntegrityError:
             flash("Panel ID must be unique.","error")
@@ -285,9 +316,9 @@ def create_app(test_config=None):
         return None
 
     def append_audit(data, action, supplier_id, details=None):
-        data["schemaVersion"] = max(int(data.get("schemaVersion", 1)), 2)
+        data["schemaVersion"] = max(int(data.get("schemaVersion", 1)), 3)
         metadata = data["panel"].setdefault("metadata", {})
-        metadata["version"] = max(int(metadata.get("version", 1)), 2)
+        metadata["version"] = max(int(metadata.get("version", 1)), 3)
         metadata["updatedAt"] = now_iso()
         trail = metadata.setdefault("auditTrail", [])
         trail.append({
@@ -526,7 +557,16 @@ def create_app(test_config=None):
             abort(404)
         new_active = 0 if row["active"] else 1
         if new_active == 0:
-            in_use = get_db().execute("SELECT COUNT(*) FROM panels WHERE mdf_code=? AND archived_at IS NULL", (code,)).fetchone()[0]
+            in_use = 0
+            rows = get_db().execute("SELECT data_json FROM panels WHERE archived_at IS NULL").fetchall()
+            for panel_row in rows:
+                try:
+                    core = json.loads(panel_row["data_json"]).get("panel", {})
+                    selected = core.get("mdfCodes") or [core.get("mdfCode")]
+                    if code in selected:
+                        in_use += 1
+                except (json.JSONDecodeError, TypeError):
+                    pass
             if in_use:
                 flash(f"MDF code {code} is used by {in_use} active panel(s) and cannot be deactivated.","error")
                 return redirect(url_for("mdf_settings"))
