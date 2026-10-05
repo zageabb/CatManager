@@ -19,7 +19,8 @@ An item is complete only when the source is present, relevant tests pass, and CI
 ## V1 next development
 - [x] DEV-009 Supplier edit and delete with exact-ID confirmation and audit-safe snapshots.
   - Evidence: supplier edit/delete routes in `app.py`, edit/delete controls in `panel_view.html`, audit trail snapshots in panel metadata, behavioural tests.
-- [ ] DEV-010 Panel archive/delete lifecycle rather than destructive default deletion.
+- [x] DEV-010 Reversible panel archive lifecycle with explicit confirmation and restore.
+  - Evidence: SQLite `archived_at` migration, archive/restore routes, archived portfolio filter, lifecycle audit entries and behavioural tests.
 - [ ] DEV-011 MDF master-data administration screen; move MDF reference data from code to database.
 - [ ] DEV-012 Portfolio favourites, sorting, pagination and persistent filters.
 - [ ] DEV-013 True dashboard calculations including configurable spend/currency semantics and qualification review dates.
@@ -36,4 +37,4 @@ An item is complete only when the source is present, relevant tests pass, and CI
 2. Custom values are keyed by immutable fieldId, never display label.
 3. Region is represented by level and value.
 4. Panel IDs are immutable from the raw JSON editor.
-5. Schema version 2 adds an append-only metadata audit trail for supplier create/update/delete actions; delete retains a full supplier recovery snapshot.
+5. Schema version 2 adds append-only metadata audit and reversible lifecycle metadata. Supplier delete retains a full recovery snapshot; panel removal is implemented as archive/restore rather than destructive deletion.
