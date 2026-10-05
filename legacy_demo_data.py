@@ -32,6 +32,7 @@ COMMON_FIELDS = [
     field("supplier_contact_name", "Supplier Contact Name", order=13),
     field("supplier_contact_email", "Supplier Contact Email", order=14),
     field("website", "Website", order=15),
+    field("qualification_status", "Qualification Status", order=16),
 ]
 
 
