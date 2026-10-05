@@ -22,6 +22,20 @@ DEFAULT_MDF_CODES = [
 def now_iso():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
+def load_mdf_catalogue():
+    catalogue_path = Path(__file__).resolve().parent / "data" / "mdf_codes.json"
+    if catalogue_path.exists():
+        try:
+            rows = json.loads(catalogue_path.read_text(encoding="utf-8"))
+            return [
+                {"code": str(row["code"]).strip(), "description": str(row["description"]).strip()}
+                for row in rows
+                if row.get("code") and row.get("description")
+            ]
+        except (json.JSONDecodeError, KeyError, TypeError):
+            pass
+    return DEFAULT_MDF_CODES
+
 def create_app(test_config=None):
     app = Flask(__name__)
     app.config.from_mapping(
@@ -73,11 +87,13 @@ def create_app(test_config=None):
         columns = {row[1] for row in db.execute("PRAGMA table_info(panels)").fetchall()}
         if "archived_at" not in columns:
             db.execute("ALTER TABLE panels ADD COLUMN archived_at TEXT")
-        if db.execute("SELECT COUNT(*) FROM mdf_codes").fetchone()[0] == 0:
-            ts = now_iso()
-            db.executemany(
-                "INSERT INTO mdf_codes(code,description,active,created_at,updated_at) VALUES(?,?,?,?,?)",
-                [(m["code"], m["description"], 1, ts, ts) for m in DEFAULT_MDF_CODES],
+        ts = now_iso()
+        for m in load_mdf_catalogue():
+            db.execute(
+                """INSERT INTO mdf_codes(code,description,active,created_at,updated_at)
+                   VALUES(?,?,?,?,?)
+                   ON CONFLICT(code) DO UPDATE SET description=excluded.description, updated_at=excluded.updated_at""",
+                (m["code"], m["description"], 1, ts, ts),
             )
         db.commit()
         rows = db.execute("SELECT id,mdf_code,data_json FROM panels").fetchall()
