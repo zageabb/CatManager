@@ -95,3 +95,26 @@ def test_delete_supplier_requires_exact_confirmation_and_keeps_snapshot(client):
     audit=body["panel"]["metadata"]["auditTrail"]
     assert audit[-1]["action"]=="supplier_deleted"
     assert audit[-1]["details"]["snapshot"]["supplierId"]=="SUP-1"
+
+
+def test_archive_panel_requires_confirmation_and_is_reversible(client):
+    create_panel(client)
+    refused=client.post("/panels/CMP1000/archive", data={"confirm_panel_id":"wrong"})
+    assert refused.status_code==302
+    assert client.get("/api/panels/CMP1000").status_code==200
+    assert b"CMP1000" in client.get("/").data
+
+    archived=client.post("/panels/CMP1000/archive", data={"confirm_panel_id":"CMP1000"})
+    assert archived.status_code==302
+    assert b"CMP1000" not in client.get("/").data
+    assert b"CMP1000" in client.get("/?archived=1").data
+    body=client.get("/api/panels/CMP1000").get_json()
+    assert body["panel"]["metadata"]["status"]=="archived"
+    assert body["panel"]["metadata"]["auditTrail"][-1]["action"]=="panel_archived"
+
+    restored=client.post("/panels/CMP1000/restore")
+    assert restored.status_code==302
+    assert b"CMP1000" in client.get("/").data
+    body=client.get("/api/panels/CMP1000").get_json()
+    assert body["panel"]["metadata"]["status"]=="active"
+    assert body["panel"]["metadata"]["auditTrail"][-1]["action"]=="panel_restored"
