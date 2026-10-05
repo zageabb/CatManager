@@ -63,6 +63,9 @@ def create_app(test_config=None):
             updated_at TEXT NOT NULL
         );
         """)
+        columns = {row[1] for row in db.execute("PRAGMA table_info(panels)").fetchall()}
+        if "archived_at" not in columns:
+            db.execute("ALTER TABLE panels ADD COLUMN archived_at TEXT")
         db.commit()
         if app.config.get("SEED_DEMO") and db.execute("SELECT COUNT(*) FROM panels").fetchone()[0] == 0:
             seed_demo(db)
@@ -167,9 +170,10 @@ def create_app(test_config=None):
 
     @app.route("/")
     def portfolio():
+        show_archived = request.args.get("archived","") == "1"
         rows = get_db().execute("SELECT * FROM panels ORDER BY updated_at DESC").fetchall()
-        panels = [row_to_panel(r) for r in rows]
-        all_panels = list(panels)
+        all_panels = [row_to_panel(r) for r in rows]
+        panels = [p for p in all_panels if show_archived or not p.get("archived_at")]
         search = request.args.get("q","").strip().lower()
         category = request.args.get("category","")
         business = request.args.get("business","")
@@ -194,7 +198,9 @@ def create_app(test_config=None):
                 if q in qualifications: qualifications[q] += 1
                 if c in classifications: classifications[c] += 1
         top_spend = sorted(spend_by_category.items(), key=lambda x:x[1], reverse=True)[:4]
-        return render_template("portfolio.html",panels=panels,total_panels=len(all_panels),supplier_count=supplier_count,top_spend=top_spend,qualifications=qualifications,classifications=classifications)
+        active_total = sum(1 for p in all_panels if not p.get("archived_at"))
+        archived_total = len(all_panels) - active_total
+        return render_template("portfolio.html",panels=panels,total_panels=active_total,supplier_count=supplier_count,top_spend=top_spend,qualifications=qualifications,classifications=classifications,show_archived=show_archived,archived_total=archived_total)
 
     @app.route("/panels/new", methods=["GET","POST"])
     def panel_new():
@@ -357,6 +363,43 @@ def create_app(test_config=None):
         append_audit(data, "supplier_deleted", supplier_id, {"snapshot": snapshot})
         save_panel_data(panel, data)
         flash(f"Supplier {supplier_id} deleted. A recovery snapshot was retained in the panel audit trail.","success")
+        return redirect(url_for("panel_view",panel_id=panel_id))
+
+    @app.route("/panels/<panel_id>/archive", methods=["POST"])
+    def panel_archive(panel_id):
+        panel = get_panel_or_404(panel_id)
+        confirmation = request.form.get("confirm_panel_id","").strip()
+        if confirmation != panel_id:
+            flash("Panel was not archived: confirmation did not match the Panel ID.","error")
+            return redirect(url_for("panel_view",panel_id=panel_id))
+        if panel.get("archived_at"):
+            flash("Panel is already archived.","error")
+            return redirect(url_for("panel_view",panel_id=panel_id))
+        data = panel["data"]
+        archived_at = now_iso()
+        metadata = data["panel"].setdefault("metadata",{})
+        metadata["status"] = "archived"
+        metadata["archivedAt"] = archived_at
+        append_audit(data, "panel_archived", panel_id, {"archivedAt": archived_at})
+        get_db().execute("UPDATE panels SET data_json=?,updated_at=?,archived_at=? WHERE id=?",(json.dumps(data),now_iso(),archived_at,panel["id"]))
+        get_db().commit()
+        flash(f"Panel {panel_id} archived. It remains recoverable.","success")
+        return redirect(url_for("portfolio"))
+
+    @app.route("/panels/<panel_id>/restore", methods=["POST"])
+    def panel_restore(panel_id):
+        panel = get_panel_or_404(panel_id)
+        if not panel.get("archived_at"):
+            flash("Panel is already active.","error")
+            return redirect(url_for("panel_view",panel_id=panel_id))
+        data = panel["data"]
+        metadata = data["panel"].setdefault("metadata",{})
+        metadata["status"] = "active"
+        metadata["archivedAt"] = None
+        append_audit(data, "panel_restored", panel_id)
+        get_db().execute("UPDATE panels SET data_json=?,updated_at=?,archived_at=NULL WHERE id=?",(json.dumps(data),now_iso(),panel["id"]))
+        get_db().commit()
+        flash(f"Panel {panel_id} restored.","success")
         return redirect(url_for("panel_view",panel_id=panel_id))
 
     @app.route("/panels/<panel_id>/data", methods=["GET","POST"])
