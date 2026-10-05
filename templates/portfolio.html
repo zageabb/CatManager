@@ -9,10 +9,40 @@
 <article class="metric-card"><div class="metric-heading"><div><h3>Classification status</h3><p>By supplier classification</p></div><span class="pill pink">{{ classifications['Critical'] }} critical</span></div><div class="donut-row"><div class="donut"><strong>{{ supplier_count }}</strong><small>Total</small></div><div class="legend"><span><i class="dot d1"></i>Standard <b>{{ classifications['Standard'] }}</b></span><span><i class="dot d2"></i>Preferred <b>{{ classifications['Preferred'] }}</b></span><span><i class="dot d3"></i>Critical <b>{{ classifications['Critical'] }}</b></span></div></div><footer>Classification driven from panel data</footer></article>
 </section>
 <section class="table-card">
-<div class="table-toolbar"><div class="tabs"><a class="tab {{ 'active' if not show_archived }}" href="{{ url_for('portfolio') }}">Categories</a><a class="tab {{ 'active' if show_archived }}" href="{{ url_for('portfolio', archived=1) }}">Including archived ({{ archived_total }})</a></div><form class="filters" method="get"><select name="category"><option value="">All categories</option>{% for x in categories %}<option {{ 'selected' if request.args.get('category')==x }}>{{ x }}</option>{% endfor %}</select><select name="business"><option value="">All businesses</option>{% for x in businesses %}<option {{ 'selected' if request.args.get('business')==x }}>{{ x }}</option>{% endfor %}</select><input name="q" value="{{ request.args.get('q','') }}" placeholder="Search"><button class="btn" type="submit">Filter</button></form></div>
-<div class="table-scroll"><table class="data-table"><thead><tr><th>★</th><th>Panel</th><th>Lead MDF</th><th>Category</th><th>Business</th><th>Region</th><th>Owner</th><th>Suppliers</th><th>Spend</th><th>Qualification</th><th>Classification</th></tr></thead><tbody>
+<div class="table-toolbar">
+  <div class="tabs">
+    <a class="tab {{ 'active' if not favourites_only and not show_archived }}" href="{{ url_for('portfolio') }}">Categories</a>
+    <a class="tab {{ 'active' if favourites_only }}" href="{{ url_for('portfolio', favourites=1) }}">Favourites ({{ favourite_total }})</a>
+    <a class="tab {{ 'active' if show_archived }}" href="{{ url_for('portfolio', archived=1) }}">Including archived ({{ archived_total }})</a>
+  </div>
+  <form class="filters" method="get">
+    {% if favourites_only %}<input type="hidden" name="favourites" value="1">{% endif %}
+    {% if show_archived %}<input type="hidden" name="archived" value="1">{% endif %}
+    <select name="category"><option value="">All categories</option>{% for x in categories %}<option {{ 'selected' if filters.category==x }}>{{ x }}</option>{% endfor %}</select>
+    <select name="business"><option value="">All businesses</option>{% for x in businesses %}<option {{ 'selected' if filters.business==x }}>{{ x }}</option>{% endfor %}</select>
+    <input name="q" value="{{ filters.q }}" placeholder="Search">
+    <select name="page_size" title="Rows per page">{% for n in [10,20,50,100] %}<option value="{{ n }}" {{ 'selected' if page_size==n }}>{{ n }} rows</option>{% endfor %}</select>
+    <input type="hidden" name="sort" value="{{ sort_key }}">
+    <input type="hidden" name="direction" value="{{ direction }}">
+    <button class="btn" type="submit">Filter</button>
+    <a class="btn" href="{{ url_for('portfolio', clear=1) }}">Reset</a>
+  </form>
+</div>
+{% macro sort_link(label, key) -%}
+  {% set next_direction = 'desc' if sort_key==key and direction=='asc' else 'asc' %}
+  <a class="sort-link {{ 'active' if sort_key==key }}" href="{{ url_for('portfolio', favourites=1 if favourites_only else None, archived=1 if show_archived else None, q=filters.q, category=filters.category, business=filters.business, page_size=page_size, sort=key, direction=next_direction) }}">{{ label }}{% if sort_key==key %}<span>{{ '↑' if direction=='asc' else '↓' }}</span>{% endif %}</a>
+{%- endmacro %}
+<div class="table-scroll"><table class="data-table"><thead><tr><th>★</th><th>{{ sort_link('Panel','panel') }}</th><th>{{ sort_link('Lead MDF','mdf') }}</th><th>{{ sort_link('Category','category') }}</th><th>{{ sort_link('Business','business') }}</th><th>{{ sort_link('Region','region') }}</th><th>{{ sort_link('Owner','owner') }}</th><th>{{ sort_link('Suppliers','suppliers') }}</th><th>Spend</th><th>Qualification</th><th>Classification</th></tr></thead><tbody>
 {% for p in panels %}{% set core=p.data.panel %}{% set ns=namespace(spend=0, qual='—', cls='—') %}{% for s in core.suppliers %}{% set ns.spend=ns.spend + (s.customFields.get('annual_spend',0)|float) %}{% if loop.first %}{% set ns.qual=s.customFields.get('qualification_status','—') %}{% set ns.cls=s.customFields.get('classification','—') %}{% endif %}{% endfor %}
-<tr class="{{ 'archived-row' if p.archived_at }}"><td><span class="star {{ 'on' if loop.index <= 2 }}">★</span></td><td><a class="panel-link" href="{{ url_for('panel_view', panel_id=p.panel_id) }}">{{ p.panel_id }}</a>{% if p.archived_at %}<span class="status-label">Archived</span>{% endif %}<small>{{ p.panel_name }}</small></td><td>{{ p.mdf_code }}</td><td>{{ p.category }}</td><td>{{ p.business }}</td><td>{{ p.region_value }}</td><td>{{ p.owner }}</td><td>{{ core.suppliers|length }}</td><td>${{ '%.1f'|format(ns.spend/1000000) }}M</td><td>{{ ns.qual }}</td><td>{{ ns.cls }}</td></tr>
+<tr class="{{ 'archived-row' if p.archived_at }}"><td><form method="post" action="{{ url_for('panel_favourite', panel_id=p.panel_id) }}" class="favourite-form"><input type="hidden" name="return_to" value="{{ request.full_path }}"><button class="star-button {{ 'on' if p.is_favourite }}" type="submit" title="{{ 'Remove from favourites' if p.is_favourite else 'Add to favourites' }}">★</button></form></td><td><a class="panel-link" href="{{ url_for('panel_view', panel_id=p.panel_id) }}">{{ p.panel_id }}</a>{% if p.archived_at %}<span class="status-label">Archived</span>{% endif %}<small>{{ p.panel_name }}</small></td><td>{{ p.mdf_code }}</td><td>{{ p.category }}</td><td>{{ p.business }}</td><td>{{ p.region_value }}</td><td>{{ p.owner }}</td><td>{{ core.suppliers|length }}</td><td>${{ '%.1f'|format(ns.spend/1000000) }}M</td><td>{{ ns.qual }}</td><td>{{ ns.cls }}</td></tr>
 {% else %}<tr><td colspan="11" class="empty">No panels match the current filters.</td></tr>{% endfor %}
-</tbody></table></div><div class="table-footer">{{ panels|length }} of {{ total_panels }} panels</div></section>
+</tbody></table></div>
+<div class="table-footer">
+  <span>Showing {{ panels|length }} of {{ filtered_total }} matching panels · {{ total_panels }} active total</span>
+  <div class="pagination">
+    {% if page > 1 %}<a class="btn compact" href="{{ url_for('portfolio', favourites=1 if favourites_only else None, archived=1 if show_archived else None, q=filters.q, category=filters.category, business=filters.business, page_size=page_size, sort=sort_key, direction=direction, page=page-1) }}">Previous</a>{% endif %}
+    <span>Page {{ page }} of {{ page_count }}</span>
+    {% if page < page_count %}<a class="btn compact" href="{{ url_for('portfolio', favourites=1 if favourites_only else None, archived=1 if show_archived else None, q=filters.q, category=filters.category, business=filters.business, page_size=page_size, sort=sort_key, direction=direction, page=page+1) }}">Next</a>{% endif %}
+  </div>
+</div></section>
 {% endblock %}
