@@ -21,7 +21,8 @@ An item is complete only when the source is present, relevant tests pass, and CI
   - Evidence: supplier edit/delete routes in `app.py`, edit/delete controls in `panel_view.html`, audit trail snapshots in panel metadata, behavioural tests.
 - [x] DEV-010 Reversible panel archive lifecycle with explicit confirmation and restore.
   - Evidence: SQLite `archived_at` migration, archive/restore routes, archived portfolio filter, lifecycle audit entries and behavioural tests.
-- [ ] DEV-011 MDF master-data administration screen; move MDF reference data from code to database.
+- [x] DEV-011 MDF master-data administration screen with SQLite-backed reference data.
+  - Evidence: `mdf_codes` table and seed migration, `/settings/mdf` administration, active/inactive controls with in-use guard, panel-form dropdown sourced from database, behavioural tests.
 - [ ] DEV-012 Portfolio favourites, sorting, pagination and persistent filters.
 - [ ] DEV-013 True dashboard calculations including configurable spend/currency semantics and qualification review dates.
 - [ ] DEV-014 Field deletion impact preview when supplier data exists; preserve orphan data until explicit migration.
