@@ -706,7 +706,7 @@ def test_audit_history_captures_panel_schema_supplier_and_raw_json_changes(clien
     filtered=client.get("/panels/CMP1000/audit?action=supplier_created")
     assert filtered.status_code==200
     assert b"Supplier Created" in filtered.data
-    assert b"Panel Updated" not in filtered.data
+    assert filtered.data.count(b'class="audit-event"') == 1
 
     payload=client.get("/api/panels/CMP1000").get_json()
     prior_count=len(payload["panel"]["metadata"]["auditTrail"])
