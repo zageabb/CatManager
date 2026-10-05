@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Dashboard settings{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('portfolio') }}">Category panel</a><span>›</span><span>Dashboard settings</span>{% endblock %}
+{% block content %}
+<div class="page-title-row"><div><h1>Dashboard calculations</h1><p class="subtitle">Configure which supplier custom fields drive spend, currency, qualification and review-date metrics.</p></div></div>
+<form method="post" class="form-card">
+<h2>Field semantics</h2>
+<div class="form-grid">
+<label>Base currency *<input name="base_currency" required maxlength="3" value="{{ config.baseCurrency }}" placeholder="GBP"></label>
+<label>Spend field *<input name="spend_field_id" list="dashboard-fields" required value="{{ config.spendFieldId }}"></label>
+<label>Currency field<input name="currency_field_id" list="dashboard-fields" value="{{ config.currencyFieldId }}"></label>
+<label>Qualification status field<input name="qualification_field_id" list="dashboard-fields" value="{{ config.qualificationFieldId }}"></label>
+<label>Qualification review date field<input name="qualification_review_field_id" list="dashboard-fields" value="{{ config.qualificationReviewFieldId }}"></label>
+<label>Classification field<input name="classification_field_id" list="dashboard-fields" value="{{ config.classificationFieldId }}"></label>
+</div>
+<datalist id="dashboard-fields">{% for f in known_fields %}<option value="{{ f.fieldId }}">{{ f.fieldName }} — {{ f.type }}</option>{% endfor %}</datalist>
+<div class="section-heading"><div><h2>Currency conversion rates</h2><p>Enter one currency per line as CODE=rate. Rate means one unit of that currency expressed in the base currency. Example: EUR=0.86 when the base is GBP.</p></div></div>
+<textarea name="currency_rates" class="settings-textarea" rows="8">{% for code,rate in config.currencyRates.items() %}{{ code }}={{ rate }}{% if not loop.last %}
+{% endif %}{% endfor %}</textarea>
+<div class="form-actions"><a class="btn" href="{{ url_for('portfolio') }}">Cancel</a><button class="btn primary" type="submit">Save dashboard settings</button></div>
+</form>
+{% endblock %}
