@@ -183,10 +183,16 @@ def create_app(test_config=None):
                 (code, description, ts, ts),
             )
 
-        for source in LEGACY_DEMO_PANELS:
+        for panel_index, source in enumerate(LEGACY_DEMO_PANELS):
             suppliers = []
-            for source_supplier in source.get("suppliers", []):
+            for supplier_index, source_supplier in enumerate(source.get("suppliers", [])):
                 supplier = json.loads(json.dumps(source_supplier))
+                field_ids = {f.get("fieldId") for f in source.get("supplierFields", [])}
+                if "qualification_status" in field_ids and not supplier.get("customFields",{}).get("qualification_status"):
+                    demo_statuses = ["Qualified", "In review", "Not qualified"]
+                    supplier.setdefault("customFields",{})["qualification_status"] = demo_statuses[
+                        (panel_index + supplier_index) % len(demo_statuses)
+                    ]
                 if not supplier.get("address"):
                     supplier["address"], supplier["postCode"] = generic_supplier_address(supplier["supplierId"])
                 supplier.setdefault("postCode", "")
@@ -195,6 +201,7 @@ def create_app(test_config=None):
 
             metadata = json.loads(json.dumps(source.get("metadata", {})))
             metadata["createdAt"] = ts
+            metadata["demoQualificationGenerated"] = True
             payload = build_panel_payload(
                 source["panelId"],
                 source["panelName"],
