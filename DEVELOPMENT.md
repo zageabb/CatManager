@@ -17,7 +17,8 @@ An item is complete only when the source is present, relevant tests pass, and CI
 - [x] DEV-008 Automated tests and GitHub Actions CI.
 
 ## V1 next development
-- [ ] DEV-009 Supplier edit and delete with confirmation and audit-safe behaviour.
+- [x] DEV-009 Supplier edit and delete with exact-ID confirmation and audit-safe snapshots.
+  - Evidence: supplier edit/delete routes in `app.py`, edit/delete controls in `panel_view.html`, audit trail snapshots in panel metadata, behavioural tests.
 - [ ] DEV-010 Panel archive/delete lifecycle rather than destructive default deletion.
 - [ ] DEV-011 MDF master-data administration screen; move MDF reference data from code to database.
 - [ ] DEV-012 Portfolio favourites, sorting, pagination and persistent filters.
@@ -35,4 +36,4 @@ An item is complete only when the source is present, relevant tests pass, and CI
 2. Custom values are keyed by immutable fieldId, never display label.
 3. Region is represented by level and value.
 4. Panel IDs are immutable from the raw JSON editor.
-5. Schema version starts at 1 and must be migrated deliberately if the JSON contract changes.
+5. Schema version 2 adds an append-only metadata audit trail for supplier create/update/delete actions; delete retains a full supplier recovery snapshot.
