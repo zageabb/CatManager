@@ -184,3 +184,58 @@ def test_lead_mdf_must_be_selected(client):
         "fields_json":"[]",
     })
     assert response.status_code==400
+
+
+def test_new_custom_field_can_be_amended_by_supplier_form_and_bulk_editor(client):
+    create_panel(client)
+    client.post("/panels/CMP1000/suppliers/new", data={
+        "supplier_id":"SUP-1",
+        "supplier_name":"Supplier One",
+        "address":"Road",
+        "post_code":"AA1 1AA",
+        "custom_rating":"250",
+    })
+
+    updated_panel=client.post("/panels/CMP1000/edit", data={
+        "panel_id":"CMP1000",
+        "panel_name":"Test Transformers",
+        "category":"Transformers",
+        "business":"GI",
+        "region_level":"Country",
+        "region_value":"United Kingdom",
+        "owner":"Test Owner",
+        "mdf_codes":["MDF-TR-001"],
+        "lead_mdf_code":"MDF-TR-001",
+        "fields_json":json.dumps([
+            {"fieldId":"rating","fieldName":"Rating","type":"number","required":False,"options":[]},
+            {"fieldId":"review_status","fieldName":"Review Status","type":"dropdown","required":False,"options":["Open","Closed"]},
+        ]),
+    })
+    assert updated_panel.status_code==302
+
+    supplier_form=client.get("/panels/CMP1000/suppliers/SUP-1/edit")
+    assert supplier_form.status_code==200
+    assert b"Review Status" in supplier_form.data
+
+    panel_view=client.get("/panels/CMP1000")
+    assert b'/panels/CMP1000/suppliers/SUP-1/edit' in panel_view.data
+    assert b"Edit supplier data" in panel_view.data
+
+    bulk_page=client.get("/panels/CMP1000/suppliers/bulk-edit")
+    assert bulk_page.status_code==200
+    assert b"Review Status" in bulk_page.data
+    assert b"Supplier One" in bulk_page.data
+
+    saved=client.post("/panels/CMP1000/suppliers/bulk-edit", data={
+        "SUP-1__rating":"275",
+        "SUP-1__review_status":"Open",
+    })
+    assert saved.status_code==302
+    body=client.get("/api/panels/CMP1000").get_json()
+    supplier=body["panel"]["suppliers"][0]
+    assert supplier["supplierName"]=="Supplier One"
+    assert supplier["address"]=="Road"
+    assert supplier["postCode"]=="AA1 1AA"
+    assert supplier["customFields"]["rating"]==275.0
+    assert supplier["customFields"]["review_status"]=="Open"
+    assert body["panel"]["metadata"]["auditTrail"][-1]["action"]=="supplier_bulk_custom_fields_updated"
