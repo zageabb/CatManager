@@ -812,18 +812,62 @@ def create_app(test_config=None):
                 return supplier
         return None
 
-    def append_audit(data, action, supplier_id, details=None):
+    def append_audit(data, action, entity_id, details=None):
         data["schemaVersion"] = max(int(data.get("schemaVersion", 1)), 3)
         metadata = data["panel"].setdefault("metadata", {})
         metadata["version"] = max(int(metadata.get("version", 1)), 3)
         metadata["updatedAt"] = now_iso()
         trail = metadata.setdefault("auditTrail", [])
         trail.append({
+            "eventId": str(uuid4()),
             "timestamp": now_iso(),
             "action": action,
-            "supplierId": supplier_id,
+            "entityId": entity_id,
+            "supplierId": entity_id,
+            "actor": session.get("audit_actor", "local-user"),
             "details": details or {},
         })
+
+    def panel_change_summary(before, after):
+        before_core = before.get("panel", {}) if before else {}
+        after_core = after.get("panel", {}) if after else {}
+        changes = {}
+        scalar_fields = {
+            "panelName": "Panel Name",
+            "category": "Category",
+            "business": "Business",
+            "region": "Region",
+            "panelOwner": "Panel Owner",
+            "leadMdfCode": "Lead MDF",
+            "mdfCodes": "MDF Codes",
+        }
+        for key, label in scalar_fields.items():
+            if before_core.get(key) != after_core.get(key):
+                changes[key] = {
+                    "label": label,
+                    "before": before_core.get(key),
+                    "after": after_core.get(key),
+                }
+        before_fields = {f.get("fieldId"): f for f in before_core.get("supplierFields", [])}
+        after_fields = {f.get("fieldId"): f for f in after_core.get("supplierFields", [])}
+        added = [after_fields[k] for k in after_fields.keys() - before_fields.keys()]
+        removed = [before_fields[k] for k in before_fields.keys() - after_fields.keys()]
+        modified = []
+        for field_id in before_fields.keys() & after_fields.keys():
+            if before_fields[field_id] != after_fields[field_id]:
+                modified.append({
+                    "fieldId": field_id,
+                    "before": before_fields[field_id],
+                    "after": after_fields[field_id],
+                })
+        if added or removed or modified:
+            changes["supplierFields"] = {
+                "label": "Supplier field schema",
+                "added": added,
+                "removed": removed,
+                "modified": modified,
+            }
+        return changes
 
     def save_panel_data(panel, data):
         get_db().execute(
