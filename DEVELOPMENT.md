@@ -38,7 +38,8 @@ An item is complete only when the source is present, relevant tests pass, and CI
   - Evidence: removing a populated custom field first shows affected supplier counts/examples and requires confirmation; removed definitions are stored under `metadata.orphanedSupplierFields` while supplier values remain untouched; panel view surfaces orphan management; users can restore the field with all values intact or explicitly purge orphan values using exact field-ID confirmation; purge snapshots remain in the audit trail; behavioural tests.
 - [x] DEV-015 Import/export JSON file actions and schema-version migration.
   - Evidence: portfolio Import Panel workflow accepts JSON schema versions 1–3, migrates older MDF/metadata structures to schema 3, validates controlled values and MDF master references, requires explicit replacement for existing Panel IDs, and persists searchable metadata consistently; panel view offers downloadable JSON export; future schema versions are rejected; behavioural tests.
-- [ ] DEV-016 Audit log for panel schema and supplier changes.
+- [x] DEV-016 User-facing audit log for panel schema, supplier, lifecycle, import and raw-data changes.
+  - Evidence: audit events now carry stable event IDs, actor, entity ID, timestamp, action and structured details; panel create/edit records schema and metadata diffs; supplier create/edit/delete/bulk changes and field-orphan actions remain append-only; panel import/replacement and raw JSON edits preserve prior history and append new events; `/panels/<id>/audit` provides searchable/filterable history with expandable details; panel detail shows the audit-event count; behavioural tests.
 - [ ] DEV-017 Authentication/authorization with Category Manager and read-only roles.
 - [ ] DEV-018 Production configuration, CSRF protection, migrations and deployment documentation.
 - [ ] DEV-019 Accessibility and responsive UI review against the reference design.
