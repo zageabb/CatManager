@@ -487,6 +487,7 @@ def create_app(test_config=None):
                 continue
             suppliers = p["data"]["panel"].get("suppliers",[])
             supplier_count += len(suppliers)
+            panel_spend = 0.0
             for supplier in suppliers:
                 supplier_name = supplier.get("supplierName") or supplier.get("supplierId") or "Unknown"
                 supplier_occurrences[supplier_name] = supplier_occurrences.get(supplier_name,0) + 1
@@ -496,6 +497,7 @@ def create_app(test_config=None):
                 converted = convert_spend(amount, currency, config)
                 if converted is not None:
                     spend_by_category[p["category"]] = spend_by_category.get(p["category"],0) + converted
+                    panel_spend += converted
                 elif amount not in (None,""):
                     code = str(currency or config["baseCurrency"]).upper()
                     try:
@@ -510,6 +512,7 @@ def create_app(test_config=None):
                     classifications[c] = classifications.get(c,0) + 1
                 bucket = qualification_review_bucket(custom.get(config["qualificationReviewFieldId"]))
                 qualification_reviews[bucket] += 1
+            p["dashboard_spend"] = panel_spend
         top_spend = sorted(spend_by_category.items(), key=lambda x:x[1], reverse=True)[:4]
         top_suppliers = sorted(supplier_occurrences.items(), key=lambda x:(-x[1], x[0].lower()))[:5]
         active_total = sum(1 for p in all_panels if not p.get("archived_at"))
