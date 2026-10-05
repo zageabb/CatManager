@@ -6,8 +6,17 @@
 <div class="page-title-row"><div><h1>{{ 'Edit supplier' if supplier else 'Add supplier' }}</h1><p class="subtitle">{{ core.panelName }}</p></div></div>
 <form method="post" class="form-card">
   <h2>Supplier details</h2>
+  {% if not supplier %}
+  <div class="supplier-master-picker" data-supplier-master-picker>
+    <label>Find supplier by BPID or name
+      <input type="search" class="supplier-master-search" placeholder="Start typing BPID or supplier name…" autocomplete="off">
+    </label>
+    <div class="supplier-master-results" hidden></div>
+    <p class="help-text">Select a master supplier to populate the fixed fields below. You can still enter a supplier manually if required.</p>
+  </div>
+  {% endif %}
   <div class="form-grid">
-    <label>Supplier ID *<input name="supplier_id" required value="{{ supplier.supplierId if supplier else '' }}" {{ 'readonly' if supplier }}></label>
+    <label>Supplier ID / BPID *<input name="supplier_id" required value="{{ supplier.supplierId if supplier else '' }}" {{ 'readonly' if supplier }}></label>
     <label>Supplier Name *<input name="supplier_name" required value="{{ supplier.supplierName if supplier else '' }}"></label>
     <label>Address<input name="address" value="{{ supplier.address if supplier else '' }}"></label>
     <label>Post Code<input name="post_code" value="{{ supplier.postCode if supplier else '' }}"></label>
