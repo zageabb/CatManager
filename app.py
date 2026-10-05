@@ -367,6 +367,43 @@ def create_app(test_config=None):
             return redirect(url_for("panel_view",panel_id=panel_id))
         return render_template("supplier_form.html",panel=panel,supplier=supplier)
 
+    @app.route("/panels/<panel_id>/suppliers/bulk-edit", methods=["GET","POST"])
+    def supplier_bulk_edit(panel_id):
+        panel = get_panel_or_404(panel_id)
+        data = panel["data"]
+        suppliers = data["panel"].get("suppliers", [])
+        fields = data["panel"].get("supplierFields", [])
+        if request.method == "POST":
+            changed = []
+            for supplier in suppliers:
+                supplier_id = supplier.get("supplierId")
+                custom = supplier.setdefault("customFields", {})
+                before = json.loads(json.dumps(custom))
+                for field in fields:
+                    key = f"{supplier_id}__{field['fieldId']}"
+                    value = request.form.get(key, "")
+                    if field["type"] == "number" and value != "":
+                        try:
+                            value = float(value)
+                        except ValueError:
+                            flash(f"{supplier_id}: {field['fieldName']} must be numeric.","error")
+                            return render_template("supplier_bulk_edit.html", panel=panel),400
+                    custom[field["fieldId"]] = value
+                if custom != before:
+                    changed.append({
+                        "supplierId": supplier_id,
+                        "before": before,
+                        "after": json.loads(json.dumps(custom)),
+                    })
+            if changed:
+                append_audit(data, "supplier_bulk_custom_fields_updated", panel_id, {"changes": changed})
+                save_panel_data(panel, data)
+                flash(f"Updated custom fields for {len(changed)} supplier(s).","success")
+            else:
+                flash("No supplier custom-field changes were made.","success")
+            return redirect(url_for("panel_view", panel_id=panel_id))
+        return render_template("supplier_bulk_edit.html", panel=panel)
+
     @app.route("/panels/<panel_id>/suppliers/<supplier_id>/delete", methods=["POST"])
     def supplier_delete(panel_id, supplier_id):
         panel = get_panel_or_404(panel_id)
