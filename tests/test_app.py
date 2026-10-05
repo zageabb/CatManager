@@ -120,3 +120,31 @@ def test_archive_panel_requires_confirmation_and_is_reversible(client):
     body=client.get("/api/panels/CMP1000").get_json()
     assert body["panel"]["metadata"]["status"]=="active"
     assert body["panel"]["metadata"]["auditTrail"][-1]["action"]=="panel_restored"
+
+
+def test_mdf_master_data_admin_and_usage_guard(client):
+    page=client.get("/settings/mdf")
+    assert page.status_code==200
+    assert b"MDF-TR-001" in page.data
+
+    added=client.post("/settings/mdf", data={"code":"MDF-NEW-001","description":"New Equipment"})
+    assert added.status_code==302
+    page=client.get("/settings/mdf")
+    assert b"MDF-NEW-001" in page.data
+    assert b"New Equipment" in page.data
+
+    create_panel(client)
+    blocked=client.post("/settings/mdf/MDF-TR-001/toggle")
+    assert blocked.status_code==302
+    page=client.get("/settings/mdf")
+    assert b"used by 1 active panel" in page.data
+
+    deactivated=client.post("/settings/mdf/MDF-NEW-001/toggle")
+    assert deactivated.status_code==302
+    new_panel=client.get("/panels/new")
+    assert b'MDF-NEW-001' not in new_panel.data
+
+    reactivated=client.post("/settings/mdf/MDF-NEW-001/toggle")
+    assert reactivated.status_code==302
+    new_panel=client.get("/panels/new")
+    assert b'MDF-NEW-001' in new_panel.data
