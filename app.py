@@ -135,13 +135,23 @@ def create_app(test_config=None):
             try:
                 payload = json.loads(row["data_json"])
                 core = payload.get("panel", {})
+                changed = False
                 if "mdfCodes" not in core:
                     lead = core.get("leadMdfCode") or core.get("mdfCode") or row["mdf_code"]
                     core["mdfCode"] = lead
                     core["leadMdfCode"] = lead
                     core["mdfCodes"] = [lead] if lead else []
-                    payload["schemaVersion"] = max(int(payload.get("schemaVersion", 1)), 3)
-                    core.setdefault("metadata", {})["version"] = max(int(core.get("metadata", {}).get("version", 1)), 3)
+                    changed = True
+                if int(payload.get("schemaVersion", 1)) < 4 or "fieldGroups" not in core:
+                    core.setdefault("fieldGroups", [])
+                    for field in core.get("supplierFields", []):
+                        field.setdefault("groupId", "")
+                    payload["schemaVersion"] = 4
+                    metadata = core.setdefault("metadata", {})
+                    metadata["version"] = max(int(metadata.get("version", 1)), 4)
+                    metadata.setdefault("schema4MigratedAt", ts)
+                    changed = True
+                if changed:
                     db.execute("UPDATE panels SET data_json=? WHERE id=?", (json.dumps(payload), row["id"]))
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
@@ -149,14 +159,14 @@ def create_app(test_config=None):
         if app.config.get("SEED_DEMO") and db.execute("SELECT COUNT(*) FROM panels").fetchone()[0] == 0:
             seed_demo(db)
 
-    def build_panel_payload(panel_id, panel_name, category, business, region_level, region_value, owner, mdf_codes, lead_mdf_code, fields, suppliers, created_at=None, metadata=None):
+    def build_panel_payload(panel_id, panel_name, category, business, region_level, region_value, owner, mdf_codes, lead_mdf_code, field_groups, fields, suppliers, created_at=None, metadata=None):
         metadata = json.loads(json.dumps(metadata or {}))
         metadata.setdefault("createdAt", created_at or now_iso())
         metadata["updatedAt"] = now_iso()
-        metadata["version"] = max(int(metadata.get("version", 1)), 3)
+        metadata["version"] = max(int(metadata.get("version", 1)), 4)
         metadata.setdefault("auditTrail", [])
         return {
-            "schemaVersion": 3,
+            "schemaVersion": 4,
             "panel": {
                 "panelId": panel_id,
                 "panelName": panel_name,
@@ -167,6 +177,7 @@ def create_app(test_config=None):
                 "mdfCode": lead_mdf_code,
                 "leadMdfCode": lead_mdf_code,
                 "mdfCodes": list(mdf_codes),
+                "fieldGroups": field_groups,
                 "supplierFields": fields,
                 "suppliers": suppliers,
                 "metadata": metadata,
@@ -212,6 +223,7 @@ def create_app(test_config=None):
                 source["panelOwner"]["name"],
                 source["mdfCodes"],
                 source["leadMdfCode"],
+                source.get("fieldGroups",[]),
                 source.get("supplierFields",[]),
                 suppliers,
                 ts,
@@ -276,7 +288,26 @@ def create_app(test_config=None):
                 n += 1
             seen.add(fid)
             options = field.get("options",[]) if ftype == "dropdown" else []
-            clean.append({"fieldId":fid,"fieldName":name,"type":ftype,"options":[str(x).strip() for x in options if str(x).strip()],"required":bool(field.get("required",False)),"order":index+1})
+            clean.append({"fieldId":fid,"fieldName":name,"type":ftype,"options":[str(x).strip() for x in options if str(x).strip()],"required":bool(field.get("required",False)),"groupId":str(field.get("groupId") or "").strip(),"order":index+1})
+        return clean
+
+    def parse_field_groups(raw):
+        try:
+            groups = json.loads(raw or "[]")
+        except json.JSONDecodeError as exc:
+            raise ValueError("Field group definition is not valid JSON.") from exc
+        seen, clean = set(), []
+        for index, group in enumerate(groups):
+            name = str(group.get("name","")).strip()
+            if not name:
+                raise ValueError("Every field group needs a name.")
+            gid = str(group.get("groupId") or "").strip() or slug_id(name)
+            base, n = gid, 2
+            while gid in seen:
+                gid = f"{base}_{n}"
+                n += 1
+            seen.add(gid)
+            clean.append({"groupId":gid,"name":name,"order":index+1})
         return clean
 
     def migrate_panel_payload(payload):
@@ -284,7 +315,7 @@ def create_app(test_config=None):
             raise ValueError("JSON must contain a panel object.")
         data = json.loads(json.dumps(payload))
         version = int(data.get("schemaVersion", 1))
-        if version > 3:
+        if version > 4:
             raise ValueError(f"Unsupported schemaVersion {version}.")
         core = data["panel"]
         metadata = core.setdefault("metadata", {})
@@ -296,9 +327,13 @@ def create_app(test_config=None):
             core["leadMdfCode"] = lead
             core["mdfCode"] = lead
             core["mdfCodes"] = core.get("mdfCodes") or ([lead] if lead else [])
-        data["schemaVersion"] = 3
-        metadata["version"] = max(int(metadata.get("version", 1)), 3)
-        required = ["panelId","panelName","category","business","region","panelOwner","supplierFields","suppliers","leadMdfCode","mdfCodes"]
+        if version < 4:
+            core.setdefault("fieldGroups", [])
+            for field in core.get("supplierFields", []):
+                field.setdefault("groupId", "")
+        data["schemaVersion"] = 4
+        metadata["version"] = max(int(metadata.get("version", 1)), 4)
+        required = ["panelId","panelName","category","business","region","panelOwner","fieldGroups","supplierFields","suppliers","leadMdfCode","mdfCodes"]
         if not all(k in core for k in required):
             missing = [k for k in required if k not in core]
             raise ValueError("JSON is missing required panel properties: " + ", ".join(missing))
@@ -306,7 +341,17 @@ def create_app(test_config=None):
             raise ValueError("region must contain level and value.")
         if not isinstance(core["panelOwner"], dict):
             raise ValueError("panelOwner must be an object.")
+        core["fieldGroups"] = parse_field_groups(json.dumps(core.get("fieldGroups",[])))
         core["supplierFields"] = parse_fields(json.dumps(core.get("supplierFields",[])))
+        group_ids = {g["groupId"] for g in core["fieldGroups"]}
+        unknown_groups = sorted({f["groupId"] for f in core["supplierFields"] if f.get("groupId") and f["groupId"] not in group_ids})
+        if unknown_groups:
+            if version < 4:
+                for field in core["supplierFields"]:
+                    if field.get("groupId") not in group_ids:
+                        field["groupId"] = ""
+            else:
+                raise ValueError("Custom fields reference unknown field groups: " + ", ".join(unknown_groups))
         if not isinstance(core.get("suppliers"), list):
             raise ValueError("suppliers must be a list.")
         return data
@@ -757,14 +802,14 @@ def create_app(test_config=None):
     def panel_new():
         if request.method == "POST":
             return save_panel()
-        return render_template("panel_form.html",panel=None,fields=[])
+        return render_template("panel_form.html",panel=None,fields=[],field_groups=[])
 
     @app.route("/panels/<panel_id>/edit", methods=["GET","POST"])
     def panel_edit(panel_id):
         panel = get_panel_or_404(panel_id)
         if request.method == "POST":
             return save_panel(panel)
-        return render_template("panel_form.html",panel=panel,fields=panel["data"]["panel"].get("supplierFields",[]))
+        return render_template("panel_form.html",panel=panel,fields=panel["data"]["panel"].get("supplierFields",[]),field_groups=panel["data"]["panel"].get("fieldGroups",[]))
 
     def save_panel(existing=None):
         panel_id = request.form.get("panel_id","").strip()
@@ -778,21 +823,26 @@ def create_app(test_config=None):
         lead_mdf_code = request.form.get("lead_mdf_code","").strip()
         if not all([panel_id,panel_name,category,business,region_level,owner]) or not mdf_codes or not lead_mdf_code:
             flash("Complete all required panel fields.","error")
-            return render_template("panel_form.html",panel=existing,fields=[]),400
+            return render_template("panel_form.html",panel=existing,fields=[],field_groups=[]),400
         try:
+            field_groups = parse_field_groups(request.form.get("field_groups_json","[]"))
             fields = parse_fields(request.form.get("fields_json","[]"))
+            group_ids = {g["groupId"] for g in field_groups}
+            unknown_groups = sorted({f["groupId"] for f in fields if f.get("groupId") and f["groupId"] not in group_ids})
+            if unknown_groups:
+                raise ValueError("Custom fields reference unknown field groups: " + ", ".join(unknown_groups))
         except ValueError as exc:
             flash(str(exc),"error")
-            return render_template("panel_form.html",panel=existing,fields=[]),400
+            return render_template("panel_form.html",panel=existing,fields=[],field_groups=[]),400
         if category not in CATEGORIES or business not in BUSINESSES or region_level not in REGION_LEVELS:
             flash("One or more controlled values are invalid.","error")
-            return render_template("panel_form.html",panel=existing,fields=fields),400
+            return render_template("panel_form.html",panel=existing,fields=fields,field_groups=field_groups),400
         active_mdf = {m["code"] for m in get_mdf_codes()}
         existing_mdf = set(existing["data"]["panel"].get("mdfCodes", [existing.get("mdf_code")]) if existing else [])
         allowed_mdf = active_mdf | existing_mdf
         if any(code not in allowed_mdf for code in mdf_codes) or lead_mdf_code not in mdf_codes:
             flash("Select one or more valid MDF codes and choose the lead MDF from those selected.","error")
-            return render_template("panel_form.html",panel=existing,fields=fields),400
+            return render_template("panel_form.html",panel=existing,fields=fields,field_groups=field_groups),400
 
         db = get_db()
         suppliers = existing["data"]["panel"].get("suppliers",[]) if existing else []
@@ -847,7 +897,7 @@ def create_app(test_config=None):
             for field in fields:
                 orphaned.pop(field["fieldId"], None)
 
-        payload = build_panel_payload(panel_id,panel_name,category,business,region_level,value,owner,mdf_codes,lead_mdf_code,fields,suppliers,created_at,existing_metadata)
+        payload = build_panel_payload(panel_id,panel_name,category,business,region_level,value,owner,mdf_codes,lead_mdf_code,field_groups,fields,suppliers,created_at,existing_metadata)
         if existing:
             changes = panel_change_summary(existing["data"], payload)
             if changes:
@@ -880,7 +930,7 @@ def create_app(test_config=None):
             db.commit()
         except sqlite3.IntegrityError:
             flash("Panel ID must be unique.","error")
-            return render_template("panel_form.html",panel=existing,fields=fields),409
+            return render_template("panel_form.html",panel=existing,fields=fields,field_groups=field_groups),409
         flash("Panel saved.","success")
         return redirect(url_for("panel_view",panel_id=panel_id))
 
@@ -891,9 +941,9 @@ def create_app(test_config=None):
         return None
 
     def append_audit(data, action, entity_id, details=None):
-        data["schemaVersion"] = max(int(data.get("schemaVersion", 1)), 3)
+        data["schemaVersion"] = max(int(data.get("schemaVersion", 1)), 4)
         metadata = data["panel"].setdefault("metadata", {})
-        metadata["version"] = max(int(metadata.get("version", 1)), 3)
+        metadata["version"] = max(int(metadata.get("version", 1)), 4)
         metadata["updatedAt"] = now_iso()
         trail = metadata.setdefault("auditTrail", [])
         trail.append({
@@ -926,6 +976,12 @@ def create_app(test_config=None):
                     "before": before_core.get(key),
                     "after": after_core.get(key),
                 }
+        if before_core.get("fieldGroups", []) != after_core.get("fieldGroups", []):
+            changes["fieldGroups"] = {
+                "label": "Field groups",
+                "before": before_core.get("fieldGroups", []),
+                "after": after_core.get("fieldGroups", []),
+            }
         before_fields = {f.get("fieldId"): f for f in before_core.get("supplierFields", [])}
         after_fields = {f.get("fieldId"): f for f in after_core.get("supplierFields", [])}
         added = [after_fields[k] for k in after_fields.keys() - before_fields.keys()]
