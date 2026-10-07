@@ -11,10 +11,10 @@
 <div class="impact-examples">{% for row in impact.examples %}<div><span>{{ row.supplierId }} — {{ row.supplierName }}</span><strong>{{ row.value }}</strong></div>{% endfor %}</div>
 </div>
 {% endfor %}
-<form method="post" action="{{ url_for('panel_edit', panel_id=panel.panel_id) }}">
+<form method="post" action="{{ url_for(confirm_endpoint or 'panel_edit', panel_id=panel.panel_id) }}">
 {% for key,values in form_data.items() %}{% for value in values %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}{% endfor %}
 <input type="hidden" name="confirm_field_removal" value="1">
-<div class="form-actions"><a class="btn" href="{{ url_for('panel_edit', panel_id=panel.panel_id) }}">Cancel</a><button class="btn danger" type="submit">Remove fields and preserve data</button></div>
+<div class="form-actions"><a class="btn" href="{{ url_for(confirm_endpoint or 'panel_edit', panel_id=panel.panel_id) }}">Cancel</a><button class="btn danger" type="submit">Remove fields and preserve data</button></div>
 </form>
 </section>
 {% endblock %}
