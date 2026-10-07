@@ -41,6 +41,11 @@
   </select>
   <small class="help-text">Only MDFs selected above are available as the lead MDF.</small>
 </label>
-</div><div class="section-heading"><div><h2>Supplier data definition</h2><p>Fixed fields are always present. Add and reorder panel-specific custom fields below.</p></div><button class="btn" type="button" id="add-field">+ Add custom field</button></div>
+</div><div class="section-heading"><div><h2>Supplier data definition</h2><p>Fixed fields are always present. Organise panel-specific custom fields into named groups for clearer supplier forms.</p></div><div class="actions"><button class="btn" type="button" id="add-group">+ Add group</button><button class="btn" type="button" id="add-field">+ Add custom field</button></div></div>
+<div class="field-group-editor">
+  <div class="field-group-editor-head"><strong>Field groups</strong><span>Groups control the visible sections on supplier forms. Fields can remain ungrouped.</span></div>
+  <div id="field-groups"></div>
+</div>
 <div class="field-list">{% for fixed in ['Supplier ID','Supplier Name','Address','Post Code'] %}<div class="field-row fixed"><span class="drag">☰</span><strong>{{ fixed }}</strong><span class="field-type">Fixed</span></div>{% endfor %}<div id="custom-fields"></div></div>
+<input type="hidden" id="field-groups-json" name="field_groups_json" value="{{ field_groups|tojson|forceescape }}">
 <input type="hidden" id="fields-json" name="fields_json" value="{{ fields|tojson|forceescape }}"><div class="form-actions"><a class="btn" href="{{ url_for('portfolio') }}">Cancel</a><button class="btn primary" type="submit">Save Panel</button></div></form>{% endblock %}
