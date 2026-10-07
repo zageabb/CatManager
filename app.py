@@ -802,14 +802,21 @@ def create_app(test_config=None):
     def panel_new():
         if request.method == "POST":
             return save_panel()
-        return render_template("panel_form.html",panel=None,fields=[],field_groups=[])
+        return render_template("panel_form.html",panel=None)
 
     @app.route("/panels/<panel_id>/edit", methods=["GET","POST"])
     def panel_edit(panel_id):
         panel = get_panel_or_404(panel_id)
         if request.method == "POST":
             return save_panel(panel)
-        return render_template("panel_form.html",panel=panel,fields=panel["data"]["panel"].get("supplierFields",[]),field_groups=panel["data"]["panel"].get("fieldGroups",[]))
+        return render_template("panel_form.html",panel=panel)
+
+    @app.route("/panels/<panel_id>/configuration", methods=["GET","POST"])
+    def panel_configuration(panel_id):
+        panel = get_panel_or_404(panel_id)
+        if request.method == "POST":
+            return save_panel_configuration(panel)
+        return render_template("panel_configuration.html", panel=panel)
 
     def save_panel(existing=None):
         panel_id = request.form.get("panel_id","").strip()
@@ -823,26 +830,16 @@ def create_app(test_config=None):
         lead_mdf_code = request.form.get("lead_mdf_code","").strip()
         if not all([panel_id,panel_name,category,business,region_level,owner]) or not mdf_codes or not lead_mdf_code:
             flash("Complete all required panel fields.","error")
-            return render_template("panel_form.html",panel=existing,fields=[],field_groups=[]),400
-        try:
-            field_groups = parse_field_groups(request.form.get("field_groups_json","[]"))
-            fields = parse_fields(request.form.get("fields_json","[]"))
-            group_ids = {g["groupId"] for g in field_groups}
-            unknown_groups = sorted({f["groupId"] for f in fields if f.get("groupId") and f["groupId"] not in group_ids})
-            if unknown_groups:
-                raise ValueError("Custom fields reference unknown field groups: " + ", ".join(unknown_groups))
-        except ValueError as exc:
-            flash(str(exc),"error")
-            return render_template("panel_form.html",panel=existing,fields=[],field_groups=[]),400
+            return render_template("panel_form.html",panel=existing),400
         if category not in CATEGORIES or business not in BUSINESSES or region_level not in REGION_LEVELS:
             flash("One or more controlled values are invalid.","error")
-            return render_template("panel_form.html",panel=existing,fields=fields,field_groups=field_groups),400
+            return render_template("panel_form.html",panel=existing),400
         active_mdf = {m["code"] for m in get_mdf_codes()}
         existing_mdf = set(existing["data"]["panel"].get("mdfCodes", [existing.get("mdf_code")]) if existing else [])
         allowed_mdf = active_mdf | existing_mdf
         if any(code not in allowed_mdf for code in mdf_codes) or lead_mdf_code not in mdf_codes:
             flash("Select one or more valid MDF codes and choose the lead MDF from those selected.","error")
-            return render_template("panel_form.html",panel=existing,fields=fields,field_groups=field_groups),400
+            return render_template("panel_form.html",panel=existing),400
 
         db = get_db()
         suppliers = existing["data"]["panel"].get("suppliers",[]) if existing else []
@@ -850,52 +847,20 @@ def create_app(test_config=None):
         value = region_value or region_level
         existing_metadata = json.loads(json.dumps(existing["data"]["panel"].get("metadata", {}))) if existing else None
 
-        removed_field_impacts = []
-        removed_fields = []
         if existing:
-            old_fields = {f["fieldId"]: f for f in existing["data"]["panel"].get("supplierFields",[])}
-            new_ids = {f["fieldId"] for f in fields}
-            removed_fields = [f for fid,f in old_fields.items() if fid not in new_ids]
-            for field in removed_fields:
-                affected = []
-                for supplier in suppliers:
-                    value_at_field = supplier.get("customFields",{}).get(field["fieldId"])
-                    if value_at_field not in (None,""):
-                        affected.append({
-                            "supplierId": supplier.get("supplierId"),
-                            "supplierName": supplier.get("supplierName"),
-                            "value": value_at_field,
-                        })
-                if affected:
-                    removed_field_impacts.append({
-                        "field": field,
-                        "affectedCount": len(affected),
-                        "examples": affected[:5],
-                    })
-
-        if removed_field_impacts and request.form.get("confirm_field_removal") != "1":
-            form_data = {key: request.form.getlist(key) for key in request.form.keys()}
-            return render_template(
-                "field_removal_preview.html",
-                panel=existing,
-                impacts=removed_field_impacts,
-                form_data=form_data,
-            ),409
-
-        if existing_metadata is not None:
-            orphaned = existing_metadata.setdefault("orphanedSupplierFields", {})
-            for field in removed_fields:
-                affected_count = sum(
-                    1 for supplier in suppliers
-                    if supplier.get("customFields",{}).get(field["fieldId"]) not in (None,"")
-                )
-                orphaned[field["fieldId"]] = {
-                    "field": field,
-                    "removedAt": now_iso(),
-                    "affectedSuppliers": affected_count,
-                }
-            for field in fields:
-                orphaned.pop(field["fieldId"], None)
+            field_groups = json.loads(json.dumps(existing["data"]["panel"].get("fieldGroups", [])))
+            fields = json.loads(json.dumps(existing["data"]["panel"].get("supplierFields", [])))
+        else:
+            try:
+                field_groups = parse_field_groups(request.form.get("field_groups_json","[]"))
+                fields = parse_fields(request.form.get("fields_json","[]"))
+                group_ids = {g["groupId"] for g in field_groups}
+                unknown_groups = sorted({f["groupId"] for f in fields if f.get("groupId") and f["groupId"] not in group_ids})
+                if unknown_groups:
+                    raise ValueError("Custom fields reference unknown field groups: " + ", ".join(unknown_groups))
+            except ValueError as exc:
+                flash(str(exc),"error")
+                return render_template("panel_form.html",panel=existing),400
 
         payload = build_panel_payload(panel_id,panel_name,category,business,region_level,value,owner,mdf_codes,lead_mdf_code,field_groups,fields,suppliers,created_at,existing_metadata)
         if existing:
@@ -911,13 +876,6 @@ def create_app(test_config=None):
                 "leadMdfCode": lead_mdf_code,
                 "mdfCodes": mdf_codes,
             })
-        if removed_fields:
-            append_audit(
-                payload,
-                "panel_fields_removed",
-                panel_id,
-                {"fields":[{"fieldId":f["fieldId"],"fieldName":f["fieldName"]} for f in removed_fields]},
-            )
         ts = now_iso()
         try:
             if existing:
@@ -930,9 +888,87 @@ def create_app(test_config=None):
             db.commit()
         except sqlite3.IntegrityError:
             flash("Panel ID must be unique.","error")
-            return render_template("panel_form.html",panel=existing,fields=fields,field_groups=field_groups),409
+            return render_template("panel_form.html",panel=existing),409
         flash("Panel saved.","success")
         return redirect(url_for("panel_view",panel_id=panel_id))
+
+    def save_panel_configuration(panel):
+        data = json.loads(json.dumps(panel["data"]))
+        core = data["panel"]
+        try:
+            field_groups = parse_field_groups(request.form.get("field_groups_json","[]"))
+            fields = parse_fields(request.form.get("fields_json","[]"))
+            group_ids = {g["groupId"] for g in field_groups}
+            unknown_groups = sorted({f["groupId"] for f in fields if f.get("groupId") and f["groupId"] not in group_ids})
+            if unknown_groups:
+                raise ValueError("Custom fields reference unknown field groups: " + ", ".join(unknown_groups))
+        except ValueError as exc:
+            flash(str(exc),"error")
+            return render_template("panel_configuration.html",panel=panel),400
+
+        suppliers = core.get("suppliers", [])
+        old_fields = {f["fieldId"]: f for f in core.get("supplierFields",[])}
+        new_ids = {f["fieldId"] for f in fields}
+        removed_fields = [f for fid,f in old_fields.items() if fid not in new_ids]
+        removed_field_impacts = []
+        for field in removed_fields:
+            affected = []
+            for supplier in suppliers:
+                value_at_field = supplier.get("customFields",{}).get(field["fieldId"])
+                if value_at_field not in (None,""):
+                    affected.append({
+                        "supplierId": supplier.get("supplierId"),
+                        "supplierName": supplier.get("supplierName"),
+                        "value": value_at_field,
+                    })
+            if affected:
+                removed_field_impacts.append({
+                    "field": field,
+                    "affectedCount": len(affected),
+                    "examples": affected[:5],
+                })
+
+        if removed_field_impacts and request.form.get("confirm_field_removal") != "1":
+            form_data = {key: request.form.getlist(key) for key in request.form.keys()}
+            return render_template(
+                "field_removal_preview.html",
+                panel=panel,
+                impacts=removed_field_impacts,
+                form_data=form_data,
+                confirm_endpoint="panel_configuration",
+            ),409
+
+        metadata = core.setdefault("metadata", {})
+        orphaned = metadata.setdefault("orphanedSupplierFields", {})
+        for field in removed_fields:
+            affected_count = sum(
+                1 for supplier in suppliers
+                if supplier.get("customFields",{}).get(field["fieldId"]) not in (None,"")
+            )
+            orphaned[field["fieldId"]] = {
+                "field": field,
+                "removedAt": now_iso(),
+                "affectedSuppliers": affected_count,
+            }
+        for field in fields:
+            orphaned.pop(field["fieldId"], None)
+
+        before = json.loads(json.dumps(panel["data"]))
+        core["fieldGroups"] = field_groups
+        core["supplierFields"] = fields
+        changes = panel_change_summary(before, data)
+        if changes:
+            append_audit(data, "panel_configuration_updated", panel["panel_id"], {"changes": changes})
+        if removed_fields:
+            append_audit(
+                data,
+                "panel_fields_removed",
+                panel["panel_id"],
+                {"fields":[{"fieldId":f["fieldId"],"fieldName":f["fieldName"]} for f in removed_fields]},
+            )
+        save_panel_data(panel, data)
+        flash("Panel configuration saved.","success")
+        return redirect(url_for("panel_configuration",panel_id=panel["panel_id"]))
 
     def find_supplier(panel, supplier_id):
         for supplier in panel["data"]["panel"].get("suppliers", []):
