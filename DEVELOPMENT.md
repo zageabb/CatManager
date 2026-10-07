@@ -55,3 +55,6 @@ An item is complete only when the source is present, relevant tests pass, and CI
 3. Region is represented by level and value.
 4. Panel IDs are immutable from the raw JSON editor.
 5. Schema version 3 adds multi-MDF panels (`mdfCodes` + `leadMdfCode`) while retaining legacy `mdfCode` as the lead MDF for compatibility. Append-only audit and reversible lifecycle metadata continue from version 2.
+
+- [ ] DEV-022 Custom field groups, grouped supplier forms, and existing-panel migration.
+  - Scope: panel-level ordered field groups with stable group IDs; custom fields may reference a group while preserving immutable fieldId-based supplier values; existing panels without groups load under an implicit Ungrouped/Custom Fields section and migrate non-destructively when edited/imported; grouped rendering on supplier add/edit and bulk edit; schema migration/import/export and audit coverage; historical demo panels receive sensible presentation groups.
