@@ -46,6 +46,86 @@ def test_duplicate_panel_id_rejected(client):
     response=create_panel(client)
     assert response.status_code==409
 
+
+def test_custom_field_groups_render_on_supplier_and_bulk_forms(client):
+    response=client.post("/panels/new", data={
+        "panel_id":"CMP-GROUP",
+        "panel_name":"Grouped Panel",
+        "category":"Transformers",
+        "business":"GI",
+        "region_level":"Country",
+        "region_value":"United Kingdom",
+        "owner":"Test Owner",
+        "mdf_codes":["MDF-TR-001"],
+        "lead_mdf_code":"MDF-TR-001",
+        "field_groups_json":json.dumps([
+            {"groupId":"risk_qualification","name":"Risk & Qualification","order":1},
+            {"groupId":"performance","name":"Performance","order":2},
+        ]),
+        "fields_json":json.dumps([
+            {"fieldId":"supplier_risk","fieldName":"Supplier Risk","type":"text","required":False,"options":[],"groupId":"risk_qualification"},
+            {"fieldId":"quality","fieldName":"Quality","type":"number","required":False,"options":[],"groupId":"performance"},
+            {"fieldId":"notes","fieldName":"Notes","type":"text","required":False,"options":[]},
+        ]),
+    })
+    assert response.status_code==302
+    body=client.get("/api/panels/CMP-GROUP").get_json()
+    assert body["schemaVersion"]==4
+    assert [g["name"] for g in body["panel"]["fieldGroups"]]==["Risk & Qualification","Performance"]
+    assert body["panel"]["supplierFields"][0]["groupId"]=="risk_qualification"
+    assert body["panel"]["supplierFields"][2]["groupId"]==""
+
+    supplier_form=client.get("/panels/CMP-GROUP/suppliers/new")
+    assert supplier_form.status_code==200
+    assert b"Risk &amp; Qualification" in supplier_form.data
+    assert b"Performance" in supplier_form.data
+    assert b"Ungrouped" in supplier_form.data
+
+    client.post("/panels/CMP-GROUP/suppliers/new", data={
+        "supplier_id":"SUP-G1","supplier_name":"Grouped Supplier","address":"","post_code":"",
+        "custom_supplier_risk":"Low","custom_quality":"4","custom_notes":"Legacy-compatible",
+    })
+    bulk=client.get("/panels/CMP-GROUP/suppliers/bulk-edit")
+    assert bulk.status_code==200
+    assert b"Risk &amp; Qualification" in bulk.data
+    assert b"Performance" in bulk.data
+    assert b"Ungrouped" in bulk.data
+
+
+def test_existing_schema3_panel_migrates_without_losing_supplier_values(app):
+    client=app.test_client()
+    create_panel(client, "CMP-OLD")
+    client.post("/panels/CMP-OLD/suppliers/new", data={
+        "supplier_id":"SUP-OLD","supplier_name":"Existing Supplier","address":"","post_code":"",
+        "custom_rating":"275",
+    })
+    with app.app_context():
+        import sqlite3
+        db=sqlite3.connect(app.config["DATABASE"])
+        row=db.execute("SELECT data_json FROM panels WHERE panel_id='CMP-OLD'").fetchone()
+        payload=json.loads(row[0])
+        payload["schemaVersion"]=3
+        payload["panel"].pop("fieldGroups", None)
+        for field in payload["panel"]["supplierFields"]:
+            field.pop("groupId", None)
+        payload["panel"]["metadata"]["version"]=3
+        db.execute("UPDATE panels SET data_json=? WHERE panel_id='CMP-OLD'", (json.dumps(payload),))
+        db.commit()
+        db.close()
+
+    migrated_app=create_app({
+        "TESTING":True,
+        "DATABASE":app.config["DATABASE"],
+        "SEED_DEMO":False,
+        "SECRET_KEY":"test",
+    })
+    migrated=migrated_app.test_client().get("/api/panels/CMP-OLD").get_json()
+    assert migrated["schemaVersion"]==4
+    assert migrated["panel"]["fieldGroups"]==[]
+    assert migrated["panel"]["supplierFields"][0]["groupId"]==""
+    assert migrated["panel"]["suppliers"][0]["customFields"]["rating"]==275.0
+    assert "schema4MigratedAt" in migrated["panel"]["metadata"]
+
 def test_add_supplier_uses_custom_schema(client):
     create_panel(client)
     response=client.post("/panels/CMP1000/suppliers/new", data={"supplier_id":"SUP-1","supplier_name":"Supplier One","address":"Road","post_code":"AA1 1AA","custom_rating":"250"})
@@ -568,16 +648,16 @@ def test_panel_import_migrates_v1_and_export_returns_current_schema(client):
     )
     assert response.status_code==302
     body=client.get("/api/panels/CMP6000").get_json()
-    assert body["schemaVersion"]==3
+    assert body["schemaVersion"]==4
     assert body["panel"]["leadMdfCode"]=="MDF-TR-001"
     assert body["panel"]["mdfCodes"]==["MDF-TR-001"]
-    assert body["panel"]["metadata"]["version"]==3
+    assert body["panel"]["metadata"]["version"]==4
     exported=client.get("/panels/CMP6000/export")
     assert exported.status_code==200
     assert exported.mimetype=="application/json"
     assert 'attachment; filename="CMP6000.json"' in exported.headers["Content-Disposition"]
     exported_body=json.loads(exported.data)
-    assert exported_body["schemaVersion"]==3
+    assert exported_body["schemaVersion"]==4
 
 def test_panel_import_requires_replace_for_existing_panel(client):
     create_panel(client)
