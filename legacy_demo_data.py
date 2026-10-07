@@ -5,6 +5,37 @@ the old MDF references and supplier-panel fields so the demo resembles the forme
 Europe Hub panel rather than synthetic sample data.
 """
 
+FIELD_GROUPS = [
+    {"groupId": "supplier_profile", "name": "Supplier Profile", "order": 1},
+    {"groupId": "risk_qualification", "name": "Risk & Qualification", "order": 2},
+    {"groupId": "performance", "name": "Performance", "order": 3},
+    {"groupId": "commercial", "name": "Commercial", "order": 4},
+    {"groupId": "contact_information", "name": "Contact Information", "order": 5},
+]
+
+FIELD_GROUP_BY_ID = {
+    "country": "supplier_profile",
+    "classification": "supplier_profile",
+    "ksm": "supplier_profile",
+    "branch_location": "supplier_profile",
+    "supplier_risk": "risk_qualification",
+    "spe": "risk_qualification",
+    "qualification_status": "risk_qualification",
+    "hse": "performance",
+    "response": "performance",
+    "competitiveness": "performance",
+    "delivery_time": "performance",
+    "quality": "performance",
+    "user_experience": "performance",
+    "fa_or_price_list": "commercial",
+    "turnover_kusd": "commercial",
+    "minimum_project_amount_kusd": "commercial",
+    "supplier_contact_name": "contact_information",
+    "supplier_contact_email": "contact_information",
+    "website": "contact_information",
+}
+
+
 def field(field_id, name, field_type="text", order=1):
     return {
         "fieldId": field_id,
@@ -12,6 +43,7 @@ def field(field_id, name, field_type="text", order=1):
         "type": field_type,
         "options": [],
         "required": False,
+        "groupId": FIELD_GROUP_BY_ID.get(field_id, ""),
         "order": order,
     }
 
@@ -45,6 +77,9 @@ def supplier(supplier_id, name, **custom):
 
 
 def panel(panel_id, sheet, name, category, mdf, suppliers, fields=None):
+    effective_fields = fields or COMMON_FIELDS
+    used_group_ids = {f.get("groupId") for f in effective_fields if f.get("groupId")}
+    field_groups = [dict(g) for g in FIELD_GROUPS if g["groupId"] in used_group_ids]
     return {
         "panelId": panel_id,
         "panelName": name,
@@ -54,7 +89,8 @@ def panel(panel_id, sheet, name, category, mdf, suppliers, fields=None):
         "panelOwner": {"name": "Europe Hub"},
         "leadMdfCode": mdf,
         "mdfCodes": [mdf],
-        "supplierFields": fields or COMMON_FIELDS,
+        "fieldGroups": field_groups,
+        "supplierFields": effective_fields,
         "suppliers": suppliers,
         "metadata": {
             "legacySource": "Dynamic Supplier Panel 07Sep2021.xlsm",
