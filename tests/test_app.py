@@ -41,6 +41,24 @@ def test_create_panel_and_api(client):
     assert body["panel"]["region"]["value"]=="United Kingdom"
     assert body["panel"]["supplierFields"][0]["fieldId"]=="rating"
 
+def test_edit_panel_excludes_custom_fields_and_configuration_owns_them(client):
+    create_panel(client)
+    edit_page=client.get("/panels/CMP1000/edit")
+    assert edit_page.status_code==200
+    assert b"Panel details" in edit_page.data
+    assert b"Supplier data definition" not in edit_page.data
+    assert b"Rating" not in edit_page.data
+
+    config_page=client.get("/panels/CMP1000/configuration")
+    assert config_page.status_code==200
+    assert b"Panel Configuration" in config_page.data
+    assert b"Supplier data definition" in config_page.data
+    assert b"Rating" in config_page.data
+
+    view=client.get("/panels/CMP1000")
+    assert b"Panel Configuration" in view.data
+
+
 def test_duplicate_panel_id_rejected(client):
     create_panel(client)
     response=create_panel(client)
@@ -278,16 +296,8 @@ def test_new_custom_field_can_be_amended_by_supplier_form_and_bulk_editor(client
         "custom_rating":"250",
     })
 
-    updated_panel=client.post("/panels/CMP1000/edit", data={
-        "panel_id":"CMP1000",
-        "panel_name":"Test Transformers",
-        "category":"Transformers",
-        "business":"GI",
-        "region_level":"Country",
-        "region_value":"United Kingdom",
-        "owner":"Test Owner",
-        "mdf_codes":["MDF-TR-001"],
-        "lead_mdf_code":"MDF-TR-001",
+    updated_panel=client.post("/panels/CMP1000/configuration", data={
+        "field_groups_json":"[]",
         "fields_json":json.dumps([
             {"fieldId":"rating","fieldName":"Rating","type":"number","required":False,"options":[]},
             {"fieldId":"review_status","fieldName":"Review Status","type":"dropdown","required":False,"options":["Open","Closed"]},
@@ -569,20 +579,9 @@ def test_field_removal_previews_impact_preserves_orphan_and_allows_restore_or_pu
         "post_code":"AA1 1AA",
         "custom_rating":"250",
     })
-    edit_data={
-        "panel_id":"CMP1000",
-        "panel_name":"Test Transformers",
-        "category":"Transformers",
-        "business":"GI",
-        "region_level":"Country",
-        "region_value":"United Kingdom",
-        "owner":"Test Owner",
-        "mdf_codes":["MDF-TR-001"],
-        "lead_mdf_code":"MDF-TR-001",
-        "fields_json":"[]",
-    }
+    edit_data={"field_groups_json":"[]","fields_json":"[]"}
 
-    preview=client.post("/panels/CMP1000/edit", data=edit_data)
+    preview=client.post("/panels/CMP1000/configuration", data=edit_data)
     assert preview.status_code==409
     assert b"Field removal impact" in preview.data
     assert b"Rating" in preview.data
@@ -592,7 +591,7 @@ def test_field_removal_previews_impact_preserves_orphan_and_allows_restore_or_pu
     assert before["panel"]["supplierFields"][0]["fieldId"]=="rating"
     assert before["panel"]["suppliers"][0]["customFields"]["rating"]==250.0
 
-    confirmed=client.post("/panels/CMP1000/edit", data={**edit_data,"confirm_field_removal":"1"})
+    confirmed=client.post("/panels/CMP1000/configuration", data={**edit_data,"confirm_field_removal":"1"})
     assert confirmed.status_code==302
     body=client.get("/api/panels/CMP1000").get_json()
     assert body["panel"]["supplierFields"]==[]
@@ -612,8 +611,8 @@ def test_field_removal_previews_impact_preserves_orphan_and_allows_restore_or_pu
     assert restored_body["panel"]["supplierFields"][0]["fieldId"]=="rating"
     assert "rating" not in restored_body["panel"]["metadata"]["orphanedSupplierFields"]
 
-    client.post("/panels/CMP1000/edit", data=edit_data)
-    client.post("/panels/CMP1000/edit", data={**edit_data,"confirm_field_removal":"1"})
+    client.post("/panels/CMP1000/configuration", data=edit_data)
+    client.post("/panels/CMP1000/configuration", data={**edit_data,"confirm_field_removal":"1"})
     refused=client.post("/panels/CMP1000/fields/orphans/rating/purge", data={"confirm_field_id":"wrong"})
     assert refused.status_code==302
     assert "rating" in client.get("/api/panels/CMP1000").get_json()["panel"]["suppliers"][0]["customFields"]
@@ -751,10 +750,6 @@ def test_audit_history_captures_panel_schema_supplier_and_raw_json_changes(clien
         "owner":"New Owner",
         "mdf_codes":["MDF-TR-001"],
         "lead_mdf_code":"MDF-TR-001",
-        "fields_json":json.dumps([
-            {"fieldId":"rating","fieldName":"Rating","type":"number","required":False,"options":[]},
-            {"fieldId":"notes","fieldName":"Notes","type":"text","required":False,"options":[]},
-        ]),
     })
     assert edited.status_code==302
     body=client.get("/api/panels/CMP1000").get_json()
@@ -762,9 +757,22 @@ def test_audit_history_captures_panel_schema_supplier_and_raw_json_changes(clien
     assert update_event["action"]=="panel_updated"
     assert "panelName" in update_event["details"]["changes"]
     assert "panelOwner" in update_event["details"]["changes"]
-    assert "supplierFields" in update_event["details"]["changes"]
+    assert "supplierFields" not in update_event["details"]["changes"]
     assert update_event["eventId"]
     assert update_event["actor"]=="local-user"
+
+    configured=client.post("/panels/CMP1000/configuration", data={
+        "field_groups_json":"[]",
+        "fields_json":json.dumps([
+            {"fieldId":"rating","fieldName":"Rating","type":"number","required":False,"options":[]},
+            {"fieldId":"notes","fieldName":"Notes","type":"text","required":False,"options":[]},
+        ]),
+    })
+    assert configured.status_code==302
+    body=client.get("/api/panels/CMP1000").get_json()
+    config_event=body["panel"]["metadata"]["auditTrail"][-1]
+    assert config_event["action"]=="panel_configuration_updated"
+    assert "supplierFields" in config_event["details"]["changes"]
 
     supplier=client.post("/panels/CMP1000/suppliers/new", data={
         "supplier_id":"SUP-AUDIT",
