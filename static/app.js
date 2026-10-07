@@ -2,14 +2,57 @@
   const root = document.querySelector("#custom-fields");
   const hidden = document.querySelector("#fields-json");
   const add = document.querySelector("#add-field");
+  const groupRoot = document.querySelector("#field-groups");
+  const groupHidden = document.querySelector("#field-groups-json");
+  const addGroup = document.querySelector("#add-group");
 
   function esc(v){return String(v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c];});}
   function slug(v){return v.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"") || "custom_field";}
-  function parse(){if(!hidden)return [];try{return JSON.parse(hidden.value||"[]");}catch(e){return [];}}
-  let fields=parse();
+  function parseValue(el){if(!el)return [];try{return JSON.parse(el.value||"[]");}catch(e){return [];}}
+  let fields=parseValue(hidden);
+  let groups=parseValue(groupHidden);
 
-  function sync(){if(hidden)hidden.value=JSON.stringify(fields.map(function(f,i){f.order=i+1;return f;}));}
-  function render(){
+  function sync(){
+    if(hidden)hidden.value=JSON.stringify(fields.map(function(f,i){f.order=i+1;return f;}));
+    if(groupHidden)groupHidden.value=JSON.stringify(groups.map(function(g,i){g.order=i+1;return g;}));
+  }
+  function groupOptions(current){
+    return '<option value="">Ungrouped</option>'+groups.map(function(g){
+      return '<option value="'+esc(g.groupId)+'" '+(current===g.groupId?"selected":"")+'>'+esc(g.name||"Untitled group")+'</option>';
+    }).join("");
+  }
+  function renderGroups(){
+    if(!groupRoot)return;
+    groupRoot.innerHTML="";
+    groups.forEach(function(g,index){
+      const row=document.createElement("div");
+      row.className="field-group-row";
+      row.innerHTML=
+        '<span class="group-order">'+(index+1)+'</span>'+
+        '<input class="group-name" value="'+esc(g.name||"")+'" placeholder="Group name">'+
+        '<div class="group-row-actions">'+
+        '<button type="button" class="btn compact group-up" '+(index===0?"disabled":"")+'>↑</button>'+
+        '<button type="button" class="btn compact group-down" '+(index===groups.length-1?"disabled":"")+'>↓</button>'+
+        '<button type="button" class="btn compact danger group-delete">Delete</button></div>';
+      row.querySelector(".group-name").addEventListener("input",function(e){groups[index].name=e.target.value;renderFields();sync();});
+      row.querySelector(".group-up").addEventListener("click",function(){if(index<1)return;const moved=groups.splice(index,1)[0];groups.splice(index-1,0,moved);renderGroups();renderFields();sync();});
+      row.querySelector(".group-down").addEventListener("click",function(){if(index>=groups.length-1)return;const moved=groups.splice(index,1)[0];groups.splice(index+1,0,moved);renderGroups();renderFields();sync();});
+      row.querySelector(".group-delete").addEventListener("click",function(){
+        const gid=g.groupId;
+        fields.forEach(function(field){if(field.groupId===gid)field.groupId="";});
+        groups.splice(index,1);
+        renderGroups();renderFields();sync();
+      });
+      groupRoot.appendChild(row);
+    });
+    if(!groups.length){
+      const empty=document.createElement("p");
+      empty.className="help-text";
+      empty.textContent="No groups defined. Existing and new custom fields can remain in the Ungrouped section.";
+      groupRoot.appendChild(empty);
+    }
+  }
+  function renderFields(){
     if(!root)return;
     root.innerHTML="";
     fields.forEach(function(f,index){
@@ -22,6 +65,7 @@
         '<span class="drag" title="Drag to reorder">☰</span>'+
         '<input class="field-name" value="'+esc(f.fieldName||"")+'" placeholder="Field name">'+
         '<select class="field-kind">'+opts+'</select>'+
+        '<select class="field-group" aria-label="Field group">'+groupOptions(f.groupId||"")+'</select>'+
         '<input class="field-options '+(f.type==="dropdown"?"":"hidden")+'" value="'+esc((f.options||[]).join(", "))+'" placeholder="Dropdown options, comma separated">'+
         '<label class="required-toggle"><input type="checkbox" '+(f.required?"checked":"")+'> Required</label>'+
         '<button type="button" class="icon-delete" aria-label="Delete">×</button>';
@@ -33,19 +77,27 @@
       row.querySelector(".field-kind").addEventListener("change",function(e){
         fields[index].type=e.target.value;
         if(e.target.value!=="dropdown")fields[index].options=[];
-        render();sync();
+        renderFields();sync();
       });
+      row.querySelector(".field-group").addEventListener("change",function(e){fields[index].groupId=e.target.value;sync();});
       row.querySelector(".field-options").addEventListener("input",function(e){fields[index].options=e.target.value.split(",").map(function(x){return x.trim();}).filter(Boolean);sync();});
       row.querySelector(".required-toggle input").addEventListener("change",function(e){fields[index].required=e.target.checked;sync();});
-      row.querySelector(".icon-delete").addEventListener("click",function(){fields.splice(index,1);render();sync();});
+      row.querySelector(".icon-delete").addEventListener("click",function(){fields.splice(index,1);renderFields();sync();});
       row.addEventListener("dragstart",function(e){e.dataTransfer.setData("text/plain",String(index));});
       row.addEventListener("dragover",function(e){e.preventDefault();});
-      row.addEventListener("drop",function(e){e.preventDefault();const from=Number(e.dataTransfer.getData("text/plain"));const moved=fields.splice(from,1)[0];fields.splice(index,0,moved);render();sync();});
+      row.addEventListener("drop",function(e){e.preventDefault();const from=Number(e.dataTransfer.getData("text/plain"));const moved=fields.splice(from,1)[0];fields.splice(index,0,moved);renderFields();sync();});
       root.appendChild(row);
     });
   }
-  if(add)add.addEventListener("click",function(){fields.push({fieldId:"custom_field_"+(fields.length+1),fieldName:"",type:"text",options:[],required:false,_generated:true});render();sync();});
-  render();sync();
+  if(add)add.addEventListener("click",function(){fields.push({fieldId:"custom_field_"+(fields.length+1),fieldName:"",type:"text",options:[],required:false,groupId:"",_generated:true});renderFields();sync();});
+  if(addGroup)addGroup.addEventListener("click",function(){
+    let n=groups.length+1, gid="group_"+n;
+    const used=new Set(groups.map(function(g){return g.groupId;}));
+    while(used.has(gid)){n+=1;gid="group_"+n;}
+    groups.push({groupId:gid,name:"New group",order:groups.length+1});
+    renderGroups();renderFields();sync();
+  });
+  renderGroups();renderFields();sync();
 
   const mdfPicker=document.querySelector("[data-mdf-multiselect]");
   if(mdfPicker){
