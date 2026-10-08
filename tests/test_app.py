@@ -1283,3 +1283,27 @@ def test_supplier_filter_visibility_and_typed_sort_js_contract():
     assert 'ca.dataset.type==="number"' in js
     assert 'row.hidden=!match' in js
     assert '.supplier-data-row[hidden]{display:none!important;}' in css
+
+def test_dev033_supplier_column_picker_preserves_supplier_actions(client):
+    create_panel(client, "CMP-COLUMNS")
+    page=client.get("/panels/CMP-COLUMNS")
+    assert page.status_code==200
+    html=page.get_data(as_text=True)
+    assert 'data-supplier-column-settings' in html
+    assert 'data-panel-id="CMP-COLUMNS"' in html
+    assert 'class="supplier-column-options"' in html
+    assert 'supplier-column-reset' in html
+    assert 'name="confirm_supplier_id"' in html or 'class="supplier-data-row"' not in html
+
+
+def test_dev033_column_order_keeps_original_filter_and_sort_indices():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[1]
+    js=(root/"static"/"app.js").read_text()
+    css=(root/"static"/"app.css").read_text()
+    assert 'const rowCells=new Map(rows.map(row=>[row,Array.from(row.cells)]))' in js
+    assert 'const ca=originalCell(a,sortIndex),cb=originalCell(b,sortIndex)' in js
+    assert 'const cells=rowCells.get(row).slice(0,-1)' in js
+    assert 'localStorage.setItem(storageKey' in js
+    assert 'columnOrder=[0,1,...order.filter(i=>!fixed.has(i)),headings.length-1]' in js
+    assert '[data-supplier-table] th[hidden],[data-supplier-table] td[hidden]{display:none!important;}' in css

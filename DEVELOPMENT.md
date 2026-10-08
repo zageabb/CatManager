@@ -136,3 +136,7 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 ### Current implementation: DEV-032 (supplier table filtering and sorting)
 - [x] DEV-032: Local supplier table keyword search, field-specific filters for fixed and custom fields, and type-aware column sorting (including numeric/star, boolean and selected region values); do not modify data or disrupt row actions. Regression tests and CI required before main merge.
   - Evidence: field-specific or all-column live keyword search, visible results count, reset, numeric/star-aware sorting and per-field values for regions/boolean states. Server-side supplier data remains unchanged. Tests pass in PR CI run 37812669255, commit 50f4a3491f2628668fabda8f39bab76db8764e9c.
+
+### Current implementation: DEV-033 (supplier column views)
+- [x] DEV-033: On the supplier table, configure visible columns, reorder nonessential columns with up/down controls, keep Supplier ID/Name and Actions fixed, and save view preferences per panel in browser storage. Maintain DEV-032 search/sort correctness when columns move or are hidden; tests and CI before main merge.
+  - Evidence: browser-local per-panel saved column visibility and order, fixed Supplier ID/Name/Actions, optional column movement, reset to default, original cell-index lookup retains DEV-032 filtering/sorting semantics. Regression tests passed, CI run 37813713324 on fb8c8bd4c2bd9baf4ace463500f8423235103efa.
