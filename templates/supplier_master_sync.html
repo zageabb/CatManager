@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Supplier master synchronisation{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('panel_view',panel_id=panel.panel_id) }}">{{ panel.panel_id }}</a><span>›</span><span>Master synchronisation</span>{% endblock %}
+{% block content %}<div class="page-title-row"><div><h1>Supplier master synchronisation</h1><p class="subtitle">Preview exact active-BPID differences before updating names and addresses. Supplier assessments are never changed.</p></div><a class="btn" href="{{ url_for('panel_view',panel_id=panel.panel_id) }}">Back to panel</a></div>
+<section class="table-card"><h2>Proposed updates — {{ changes|length }} supplier(s)</h2><div class="table-scroll"><table class="data-table"><thead><tr><th>Supplier BPID</th><th>Field</th><th>Current panel value</th><th>Active master value</th></tr></thead><tbody>
+{% for change in changes %}{% for field,delta in change.fields.items() %}<tr><td>{{ change.supplierId }}</td><td>{{ field }}</td><td>{{ delta.before }}</td><td>{{ delta.after }}</td></tr>{% endfor %}{% else %}<tr><td colspan="4">No differences found for suppliers with an exact active master BPID.</td></tr>{% endfor %}
+</tbody></table></div>
+{% if changes %}<form method="post" action="{{ url_for('supplier_master_sync_confirm',panel_id=panel.panel_id) }}"><input type="hidden" name="token" value="{{ token }}"><button type="submit" class="btn primary">Confirm {{ changes|length }} supplier update(s)</button></form>{% endif %}
+<p class="help-text">Changes are rejected if source or panel values change after preview. Unknown or inactive BPIDs are skipped. This action is audited.</p></section>{% endblock %}
