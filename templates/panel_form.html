@@ -2,7 +2,7 @@
 {% block title %}{{ 'Edit' if panel else ('Duplicate' if duplicate_source else 'Create') }} panel{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('portfolio') }}">Category panel</a><span>›</span><span>{{ 'Edit panel' if panel else 'Create panel' }}</span>{% endblock %}
 {% block content %}<div class="page-title-row"><div><h1>{{ 'Edit panel' if panel else 'Create panel' }}</h1><p class="subtitle">Define the core panel details. Custom supplier fields are managed separately in Panel Configuration.</p></div></div>
-<form method="post" class="form-card" id="panel-form">{% set p = panel if panel else (prefill|default({}, true)) %}<h2>Panel details</h2><div class="form-grid">
+<form method="post" class="form-card" id="panel-form" data-unsaved-guard>{% set p = panel if panel else (prefill|default({}, true)) %}<h2>Panel details</h2><div class="form-grid">
 <label>Panel ID *<input name="panel_id" required value="{{ p.get('panel_id','') }}" {{ 'readonly' if panel }} placeholder="CMP0001"></label>
 <label>Panel Name *<input name="panel_name" required value="{{ p.get('panel_name','') }}"></label>
 <label>Category *<select name="category" required>{% for x in categories %}<option {{ 'selected' if p.get('category')==x }}>{{ x }}</option>{% endfor %}</select></label>
