@@ -1639,3 +1639,37 @@ def test_dev042_full_panel_template_roundtrip_without_supplier_data(client):
     assert "Original supplier" not in client.get("/panels/CMP-TEMPLATE-NEW").get_data(as_text=True)
     assert client.post("/panels/CMP-TEMPLATE-SOURCE/save-template",data={"name":""}).status_code==302
     assert client.get("/panel-templates/not-a-template/create").status_code==404
+
+def test_dev043_supplier_history_audit_sources_and_numeric_trend():
+    from supplier_history import supplier_history
+    core={"supplierFields":[{"fieldId":"rating","fieldName":"Rating","type":"stars"}],
+          "metadata":{"auditTrail":[
+              {"timestamp":"2026-10-01T12:00:00","actor":"tester","action":"supplier_updated","entityId":"A",
+               "details":{"before":{"customFields":{"rating":2}},"after":{"customFields":{"rating":4}}}},
+              {"timestamp":"2026-10-02T12:00:00","actor":"tester","action":"supplier_excel_import","entityId":"PANEL",
+               "details":{"changes":[{"supplierId":"A","before":{"rating":4},"after":{"rating":5}},
+                                     {"supplierId":"B","before":{"rating":1},"after":{"rating":3}}]}},
+              {"timestamp":"2026-10-03T12:00:00","actor":"tester","action":"supplier_action_updated","entityId":"A",
+               "details":{"before":{"actionId":"x","status":"Open"},"after":{"actionId":"x","status":"Completed"}}},
+          ]}}
+    history=supplier_history(core,"A")
+    assert len(history["events"])==3
+    assert [(p["value"]) for p in history["trends"][0]["points"]]==[4.0,5.0]
+    assert history["events"][0]["changes"][0]["field"]=="action.status"
+    assert history["events"][1]["changes"][0]["label"]=="Rating"
+    assert len(supplier_history(core,"B")["events"])==1
+
+
+def test_dev043_supplier_history_page_read_only(client):
+    create_panel(client,"CMP-HISTORY")
+    client.post("/panels/CMP-HISTORY/suppliers/new",data={"supplier_id":"S1","supplier_name":"One","custom_rating":"2"})
+    client.post("/panels/CMP-HISTORY/suppliers/S1/edit",data={
+        "supplier_name":"One","address":"New address","post_code":"ST1","custom_rating":"4"})
+    before=client.get("/api/panels/CMP-HISTORY").get_json()
+    page=client.get("/panels/CMP-HISTORY/suppliers/S1/history")
+    assert page.status_code==200
+    assert b"Supplier history and trends" in page.data
+    assert b"Rating" in page.data
+    assert b"History" in client.get("/panels/CMP-HISTORY").data
+    assert client.get("/api/panels/CMP-HISTORY").get_json()==before
+    assert client.get("/panels/CMP-HISTORY/suppliers/UNKNOWN/history").status_code==404
