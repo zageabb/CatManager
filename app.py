@@ -1540,6 +1540,52 @@ def create_app(test_config=None):
             return redirect(url_for("panel_view",panel_id=panel_id))
         return render_template("supplier_form.html",panel=panel,supplier=None)
 
+    @app.route("/panels/<panel_id>/suppliers/<supplier_id>/actions", methods=["GET", "POST"])
+    def supplier_actions(panel_id, supplier_id):
+        panel = get_panel_or_404(panel_id)
+        supplier = find_supplier(panel, supplier_id)
+        if supplier is None:
+            from flask import abort
+            abort(404)
+        actions = supplier.setdefault("actions", [])
+        if request.method == "POST":
+            if panel.get("archived_at"):
+                from flask import abort
+                abort(403)
+            action_id = request.form.get("action_id", "").strip()
+            title = request.form.get("title", "").strip()
+            owner = request.form.get("owner", "").strip()
+            due_date = request.form.get("due_date", "").strip()
+            status = request.form.get("status", "Open")
+            if not title or len(title) > 300 or not owner or len(owner) > 120 or status not in ("Open", "In progress", "Completed"):
+                flash("Provide an action, responsible owner and valid status.", "error")
+                return render_template("supplier_actions.html", panel=panel, supplier=supplier, actions=actions), 400
+            if due_date:
+                try:
+                    from datetime import date
+                    if date.fromisoformat(due_date).isoformat() != due_date:
+                        raise ValueError()
+                except ValueError:
+                    flash("Due date must be YYYY-MM-DD.", "error")
+                    return render_template("supplier_actions.html", panel=panel, supplier=supplier, actions=actions), 400
+            item = next((a for a in actions if a["actionId"] == action_id), None) if action_id else None
+            if action_id and item is None:
+                from flask import abort
+                abort(404)
+            before = json.loads(json.dumps(item)) if item else None
+            if item is None:
+                item = {"actionId": str(uuid4()), "createdAt": now_iso()}
+                actions.append(item)
+            item.update({"title": title, "owner": owner, "dueDate": due_date,
+                         "status": status, "updatedAt": now_iso()})
+            append_audit(panel["data"], "supplier_action_updated" if before else "supplier_action_created",
+                         supplier_id, {"actionId": item["actionId"], "before": before,
+                                       "after": json.loads(json.dumps(item))})
+            save_panel_data(panel, panel["data"])
+            flash("Supplier action saved.", "success")
+            return redirect(url_for("supplier_actions", panel_id=panel_id, supplier_id=supplier_id))
+        return render_template("supplier_actions.html", panel=panel, supplier=supplier, actions=actions)
+
     @app.route("/panels/<panel_id>/suppliers/<supplier_id>/edit", methods=["GET","POST"])
     def supplier_edit(panel_id, supplier_id):
         panel = get_panel_or_404(panel_id)
