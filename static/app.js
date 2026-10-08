@@ -323,6 +323,59 @@
     });
   }
 
+
+  // DEV-032: client-side filtering and stable typed sorting of supplier rows.
+  const supplierTable=document.querySelector("[data-supplier-table]");
+  const supplierControls=document.querySelector("[data-supplier-controls]");
+  if(supplierTable && supplierControls){
+    const body=supplierTable.tBodies[0];
+    const rows=Array.from(body.querySelectorAll(".supplier-data-row"));
+    const query=supplierControls.querySelector(".supplier-table-search");
+    const filterField=supplierControls.querySelector(".supplier-filter-field");
+    const sortField=supplierControls.querySelector(".supplier-sort-field");
+    const direction=supplierControls.querySelector(".supplier-sort-direction");
+    const resultCount=supplierControls.querySelector(".supplier-results-count");
+    const noMatches=document.querySelector(".supplier-no-matches");
+    const normalise=v=>String(v==null?"":v).toLocaleLowerCase().trim();
+    function applySupplierView(){
+      const needle=normalise(query.value);
+      const filterIndex=filterField.value==="all"?null:Number(filterField.value);
+      const sortIndex=Number(sortField.value);
+      const sign=direction.value==="desc"?-1:1;
+      const collator=new Intl.Collator(undefined,{numeric:true,sensitivity:"base"});
+      const visible=rows.filter(row=>{
+        const cells=Array.from(row.cells).slice(0,-1);
+        const candidates=filterIndex===null?cells:[cells[filterIndex]];
+        const match=candidates.some(cell=>cell&&normalise(cell.dataset.filter??cell.textContent).includes(needle));
+        row.hidden=!match;
+        return match;
+      });
+      visible.sort((a,b)=>{
+        const ca=a.cells[sortIndex],cb=b.cells[sortIndex];
+        if(!ca||!cb)return 0;
+        const av=ca.dataset.sort||ca.dataset.filter||"";
+        const bv=cb.dataset.sort||cb.dataset.filter||"";
+        if(!av&&!bv)return 0;
+        if(!av)return 1;
+        if(!bv)return -1;
+        if(ca.dataset.type==="number"){
+          const na=Number(av),nb=Number(bv);
+          if(Number.isFinite(na)&&Number.isFinite(nb))return (na-nb)*sign;
+        }
+        return collator.compare(av,bv)*sign;
+      });
+      visible.forEach(row=>body.appendChild(row));
+      // Keep non-matching rows in DOM to preserve live actions and checkbox state.
+      resultCount.textContent=visible.length+" of "+rows.length+" suppliers";
+      if(noMatches)noMatches.hidden=visible.length!==0 || rows.length===0;
+    }
+    [query,filterField,sortField,direction].forEach(el=>el.addEventListener(el===query?"input":"change",applySupplierView));
+    supplierControls.querySelector(".supplier-filter-reset").addEventListener("click",()=>{
+      query.value="";filterField.value="all";sortField.value="1";direction.value="asc";applySupplierView();
+    });
+    applySupplierView();
+  }
+
   document.querySelectorAll("[data-copy]").forEach(function(btn){
     btn.addEventListener("click",async function(){const el=document.querySelector(btn.dataset.copy);if(!el)return;await navigator.clipboard.writeText(el.value||el.textContent||"");const old=btn.textContent;btn.textContent="Copied";setTimeout(function(){btn.textContent=old;},1200);});
   });
