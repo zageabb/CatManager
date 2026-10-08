@@ -969,7 +969,7 @@ def test_field_template_library_creates_independent_field_definitions(client):
     client.post("/panels/CMP-LIB/configuration", data={
         "field_groups_json": "[]", "fields_json": json.dumps(fields),
     })
-    assert client.get("/api/field-templates").get_json()[0]["options"] == ["ONAN", "ONAF"]
+    assert next(item for item in client.get("/api/field-templates").get_json() if item["templateId"] == template_id)["options"] == ["ONAN", "ONAF"]
 
 def test_boolean_field_tristate_in_supplier_and_bulk_editor(client):
     create_panel(client, "CMP-BOOL")
