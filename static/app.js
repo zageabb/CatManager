@@ -443,6 +443,33 @@
     applySupplierView();
   }
 
+
+  // DEV-037: mark data-entry forms dirty only after user interaction.
+  document.querySelectorAll("form[data-unsaved-guard]").forEach(form=>{
+    let dirty=false;
+    let submitting=false;
+    const markDirty=event=>{
+      if(event.target && event.target.matches("input,select,textarea"))dirty=true;
+    };
+    form.addEventListener("input",markDirty);
+    form.addEventListener("change",markDirty);
+    // Dynamic field/group/KPI builders update hidden inputs programmatically.
+    form.addEventListener("click",event=>{
+      if(event.target.closest("#add-field,#add-group,#add-widget,#add-template-field,.field-delete,.group-delete,.widget-remove,.group-up,.group-down,.field-up,.field-down,.icon-delete,.save-template"))dirty=true;
+    });
+    form.addEventListener("submit",()=>{submitting=true;});
+    window.addEventListener("beforeunload",event=>{
+      if(dirty&&!submitting){event.preventDefault();event.returnValue="";}
+    });
+    // Cancel/navigation links get a useful immediate confirmation.
+    document.querySelectorAll("a[href]").forEach(link=>{
+      link.addEventListener("click",event=>{
+        if(!dirty||submitting||event.defaultPrevented||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||link.target==="_blank")return;
+        if(!window.confirm("You have unsaved changes. Leave without saving?"))event.preventDefault();
+      });
+    });
+  });
+
   document.querySelectorAll("[data-copy]").forEach(function(btn){
     btn.addEventListener("click",async function(){const el=document.querySelector(btn.dataset.copy);if(!el)return;await navigator.clipboard.writeText(el.value||el.textContent||"");const old=btn.textContent;btn.textContent="Copied";setTimeout(function(){btn.textContent=old;},1200);});
   });
