@@ -92,3 +92,7 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 
 - [x] DEV-029 follow-up: make star KPI setup explicit: choose numeric/star source field, choose Average/Minimum/Maximum (and other numeric metrics where appropriate), and select Stars/Number/Both output independently from panel/supplier display location. Validate star formatting uses a suitable custom field and meaningful metric. Add regression tests, pass CI, merge to main for UDA.
   - Evidence: numeric/star field selector in KPI editor, Average/Minimum/Maximum constraints for star output, Stars/Number/Stars and number formats, server validation, behavioural regression test. PR CI run 37779062414 passed on 98bf2efea760b4948cd4ce6b95b1027fecf9c638.
+
+- [x] BUG-031 MDF multi-select search: CSS `.mdf-option{display:flex!important}` overrides rows' `hidden` property. Ensure live case-insensitive filtering by code and description actually hides non-matching options, while preserving selected MDFs and Lead MDF. Add a regression guard and pass CI prior to main/UDA merge.
+
+  - Evidence: CSS `[hidden]` override prevents forced flex styling from showing filtered-out MDF rows; regression checks CSS/JS/template contract. PR CI run 37810061015 passed on 79d02261790fe1105356dfc42eab43d9c1d22a70.
