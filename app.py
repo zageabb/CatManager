@@ -1369,6 +1369,21 @@ def create_app(test_config=None):
             flash("Excel import was not applied: " + str(exc), "error")
         return redirect(url_for("panel_view", panel_id=panel_id))
 
+    @app.route("/panels/<panel_id>/widgets/preview", methods=["POST"])
+    def dashboard_widget_preview(panel_id):
+        panel = get_panel_or_404(panel_id)
+        core = panel["data"]["panel"]
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return jsonify({"error": "Expected widget configuration."}), 400
+        try:
+            widgets = parse_dashboard_widgets(json.dumps(body.get("widgets", [])), core.get("supplierFields", []))
+        except (TypeError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+        draft = dict(core)
+        draft["dashboardWidgets"] = widgets
+        return jsonify({"widgets": calculate_dashboard_widgets(draft)})
+
     @app.route("/panels/<panel_id>/fields/orphans")
     def orphan_fields(panel_id):
         panel = get_panel_or_404(panel_id)
