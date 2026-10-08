@@ -87,13 +87,13 @@
       row.className="field-row custom";
       row.draggable=true;
       row.dataset.index=index;
-      const opts=["text","number","dropdown","date","boolean","stars"].map(function(x){return '<option value="'+x+'" '+(f.type===x?"selected":"")+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>';}).join("");
+      const opts=["text","number","dropdown","date","boolean","stars","multiselect_blocks"].map(function(x){return '<option value="'+x+'" '+(f.type===x?"selected":"")+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>';}).join("");
       row.innerHTML=
         '<span class="drag" title="Drag to reorder">☰</span>'+
         '<input class="field-name" value="'+esc(f.fieldName||"")+'" placeholder="Field name">'+
         '<select class="field-kind">'+opts+'</select>'+
         '<select class="field-group" aria-label="Field group">'+groupOptions(f.groupId||"")+'</select>'+
-        '<input class="field-options '+(f.type==="dropdown"?"":"hidden")+'" value="'+esc((f.options||[]).join(", "))+'" placeholder="Dropdown options, comma separated">'+
+        '<input class="field-options '+(["dropdown","multiselect_blocks"].includes(f.type)?"":"hidden")+'" value="'+esc((f.options||[]).join(", "))+'" placeholder="Options, comma separated">'+
         '<label class="required-toggle"><input type="checkbox" '+(f.required?"checked":"")+'> Required</label>'+
         '<button type="button" class="btn compact save-template" title="Add to predefined library">Save to library</button>'+
         '<button type="button" class="icon-delete" aria-label="Delete">×</button>';
@@ -104,7 +104,7 @@
       });
       row.querySelector(".field-kind").addEventListener("change",function(e){
         fields[index].type=e.target.value;
-        if(e.target.value!=="dropdown")fields[index].options=[];
+        if(!["dropdown","multiselect_blocks"].includes(e.target.value))fields[index].options=[];
         renderFields();sync();
       });
       row.querySelector(".field-group").addEventListener("change",function(e){fields[index].groupId=e.target.value;sync();});
