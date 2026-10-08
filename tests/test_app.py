@@ -1230,3 +1230,14 @@ def test_star_kpi_selects_custom_field_aggregation_and_output(client):
     widgets[0]["metric"]="ratio"
     widgets[0]["otherFieldId"]="score"
     assert save(widgets).status_code==400
+
+def test_mdf_search_rows_can_be_hidden_by_client_filter():
+    """The picker hides non-matching rows via hidden; CSS must not force them visible."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    css = (root / "static" / "app.css").read_text()
+    js = (root / "static" / "app.js").read_text()
+    template = (root / "templates" / "panel_form.html").read_text()
+    assert ".mdf-option[hidden]{display:none!important;}" in css
+    assert "row.hidden=q && !row.dataset.search.includes(q)" in js
+    assert 'data-search="{{ (m.code ~ \' \' ~ m.description)|lower }}"' in template
