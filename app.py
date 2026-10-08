@@ -1450,6 +1450,12 @@ def create_app(test_config=None):
             custom = supplier.setdefault("customFields", {})
             for field in data["panel"].get("supplierFields",[]):
                 value = request.form.get(f"custom_{field['fieldId']}","")
+                if field["type"] == "multiselect_blocks":
+                    try:
+                        value = parse_multiselect_value(field, request.form.getlist(f"custom_{field['fieldId']}"))
+                    except ValueError as exc:
+                        flash(str(exc), "error")
+                        return render_template("supplier_form.html", panel=panel, supplier=previous), 400
                 if field["type"] == "boolean":
                     value = True if value == "true" else False if value == "false" else None
                 if field["type"] == "stars" and value != "":
