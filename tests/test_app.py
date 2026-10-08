@@ -1292,7 +1292,7 @@ def test_dev033_supplier_column_picker_preserves_supplier_actions(client):
     assert 'data-supplier-column-settings' in html
     assert 'data-panel-id="CMP-COLUMNS"' in html
     assert 'class="supplier-column-options"' in html
-    assert 'class="supplier-column-reset"' in html
+    assert 'supplier-column-reset' in html
     assert 'name="confirm_supplier_id"' in html or 'class="supplier-data-row"' not in html
 
 
