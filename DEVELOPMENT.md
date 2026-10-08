@@ -156,3 +156,8 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 ### DEV-036 — Supplier comparison
 - [x] Read-only comparison of 2–5 suppliers within one panel, showing fixed attributes, configured custom field values, ratings, multi-region coverage, and calculated supplier KPIs. Selection via supplier-table checkboxes; validate duplicate/unknown IDs and preserve panel data. Add regression tests and CI before main merge.
   - Evidence: selected 2–5 supplier IDs, guarded route, read-only side-by-side fixed and custom attributes, star and region rendering, supplier KPI values; fixed table column-index compatibility. Regression suite passed in PR CI 37831468013 for 33a361624ef8e5da2b6e97e5da7e65e813c40747.
+
+### DEV-038 — Weighted supplier scoring (in progress)
+- [x] Configure panel-specific weighted scoring from numeric/star fields (0–5 scale), requiring positive weights and valid source fields. Display transparent per-supplier total score and missing-data status in a read-only comparison/scorecard. Save configuration with panel JSON, preserve no-score behaviour, test and pass CI before main merge.
+
+  - Evidence: `supplier_scoring.py` validates unique 0–5 numeric/star criteria with positive finite weights and computes complete-case weighted averages without persisting results. Panel Configuration edits rules and panel view shows component scores/missing values. Regression tests and PR CI 37833386400 passed on commit 98fcc2049262aa294c91e6b81724f3052c8d1824.

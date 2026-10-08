@@ -1441,3 +1441,48 @@ def test_dev036_selection_preserves_table_filters_and_column_layout():
     assert 'const fixed=new Set([0,1,2,headings.length-1]);' in js
     assert 'const candidates=filterIndex===null?cells:[originalCell(row,filterIndex)];' in js
     assert 'toggles.forEach(box=>box.addEventListener("change",refreshComparison))' in js
+
+def test_dev038_weighted_supplier_scoring_configuration_and_missing_values(client):
+    from supplier_scoring import validate_scoring, score_suppliers
+    fields=[{"fieldId":"quality","fieldName":"Quality","type":"stars"},
+            {"fieldId":"delivery","fieldName":"Delivery","type":"number"},
+            {"fieldId":"region","fieldName":"Region","type":"text"}]
+    rules=validate_scoring([{"fieldId":"quality","weight":60},{"fieldId":"delivery","weight":40}],fields)
+    core={"supplierFields":fields,"scoringCriteria":rules,"suppliers":[
+        {"supplierId":"A","customFields":{"quality":5,"delivery":2.5}},
+        {"supplierId":"B","customFields":{"quality":4}},
+    ]}
+    rows=score_suppliers(core)
+    assert rows[0]["score"]==4.0
+    assert rows[1]["score"] is None and not rows[1]["complete"]
+    for invalid in [[{"fieldId":"region","weight":2}],
+                    [{"fieldId":"quality","weight":0}],
+                    [{"fieldId":"quality","weight":1},{"fieldId":"quality","weight":2}]]:
+        with pytest.raises(ValueError):
+            validate_scoring(invalid,fields)
+
+
+def test_dev038_panel_scoring_saved_and_displayed(client):
+    create_panel(client,"CMP-SCORE")
+    fields=[{"fieldId":"rating","fieldName":"Rating","type":"number","required":False,"options":[]}]
+    response=client.post("/panels/CMP-SCORE/configuration",data={
+        "field_groups_json":"[]","fields_json":json.dumps(fields),
+        "dashboard_widgets_json":"[]",
+        "scoring_criteria_json":json.dumps([{"fieldId":"rating","weight":100}])
+    })
+    assert response.status_code==302
+    core=client.get("/api/panels/CMP-SCORE").get_json()["panel"]
+    assert core["scoringCriteria"]==[{"fieldId":"rating","weight":100.0}]
+    assert client.post("/panels/CMP-SCORE/suppliers/new",data={
+        "supplier_id":"S1","supplier_name":"Supplier One","custom_rating":"4.5"
+    }).status_code==302
+    page=client.get("/panels/CMP-SCORE")
+    assert b"Weighted supplier scores" in page.data
+    assert b"4.5 / 5" in page.data
+    invalid=client.post("/panels/CMP-SCORE/configuration",data={
+        "field_groups_json":"[]","fields_json":json.dumps(fields),
+        "dashboard_widgets_json":"[]",
+        "scoring_criteria_json":json.dumps([{"fieldId":"rating","weight":-5}])
+    })
+    assert invalid.status_code==400
+    assert client.get("/api/panels/CMP-SCORE").get_json()["panel"]["scoringCriteria"]==core["scoringCriteria"]
