@@ -1303,9 +1303,9 @@ def test_dev033_column_order_keeps_original_filter_and_sort_indices():
     css=(root/"static"/"app.css").read_text()
     assert 'const rowCells=new Map(rows.map(row=>[row,Array.from(row.cells)]))' in js
     assert 'const ca=originalCell(a,sortIndex),cb=originalCell(b,sortIndex)' in js
-    assert 'const cells=rowCells.get(row).slice(0,-1)' in js
+    assert 'const cells=rowCells.get(row).slice(1,-1)' in js
     assert 'localStorage.setItem(storageKey' in js
-    assert 'columnOrder=[0,1,...order.filter(i=>!fixed.has(i)),headings.length-1]' in js
+    assert 'columnOrder=[0,1,2,...order.filter(i=>!fixed.has(i)),headings.length-1]' in js
     assert '[data-supplier-table] th[hidden],[data-supplier-table] td[hidden]{display:none!important;}' in css
 
 def test_dev037_unsaved_guard_on_editing_forms(client):
@@ -1411,3 +1411,33 @@ def test_dev035_live_kpi_preview_without_saving(client):
     page=client.get("/panels/CMP-PREVIEW/configuration")
     assert b'data-preview-url=' in page.data
     assert b"current supplier data" in page.data
+
+def test_dev036_supplier_comparison_is_read_only_and_validated(client):
+    create_panel(client, "CMP-COMPARE")
+    for sid, rating in [("ABC","3"),("XYZ","4")]:
+        assert client.post("/panels/CMP-COMPARE/suppliers/new",data={
+            "supplier_id":sid,"supplier_name":sid,"custom_rating":rating
+        }).status_code==302
+    page=client.get("/panels/CMP-COMPARE")
+    assert page.status_code==200
+    assert page.data.count(b'class="supplier-compare-check"')==2
+    assert b'supplier-compare-form' in page.data
+    before=client.get("/api/panels/CMP-COMPARE").get_json()
+    response=client.get("/panels/CMP-COMPARE/suppliers/compare?supplier_id=ABC&supplier_id=XYZ")
+    assert response.status_code==200
+    assert b"Supplier comparison" in response.data
+    assert b"Rating" in response.data
+    assert b"ABC" in response.data and b"XYZ" in response.data
+    assert client.get("/api/panels/CMP-COMPARE").get_json()==before
+    assert client.get("/panels/CMP-COMPARE/suppliers/compare?supplier_id=ABC").status_code==302
+    assert client.get("/panels/CMP-COMPARE/suppliers/compare?supplier_id=ABC&supplier_id=ABC").status_code==302
+    assert client.get("/panels/CMP-COMPARE/suppliers/compare?supplier_id=ABC&supplier_id=UNKNOWN").status_code==400
+
+
+def test_dev036_selection_preserves_table_filters_and_column_layout():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[1]
+    js=(root/"static"/"app.js").read_text()
+    assert 'const fixed=new Set([0,1,2,headings.length-1]);' in js
+    assert 'const candidates=filterIndex===null?cells:[originalCell(row,filterIndex)];' in js
+    assert 'toggles.forEach(box=>box.addEventListener("change",refreshComparison))' in js

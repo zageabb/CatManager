@@ -161,3 +161,10 @@
 [data-supplier-table] th:nth-child(1),[data-supplier-table] td:nth-child(1),[data-supplier-table] th:nth-child(2),[data-supplier-table] td:nth-child(2){position:sticky;background:var(--surface,#fff);z-index:2;}
 [data-supplier-table] th:nth-child(1),[data-supplier-table] td:nth-child(1){left:0;}
 [data-supplier-table] th:nth-child(2),[data-supplier-table] td:nth-child(2){left:115px;}
+
+/* DEV-036 comparison selector precedes the two sticky supplier identifiers. */
+[data-supplier-table] th:nth-child(1),[data-supplier-table] td:nth-child(1){position:static;}
+[data-supplier-table] th:nth-child(2),[data-supplier-table] td:nth-child(2){left:0;}
+[data-supplier-table] th:nth-child(3),[data-supplier-table] td:nth-child(3){position:sticky;left:115px;background:var(--surface,#fff);z-index:2;}
+.supplier-comparison th:first-child{position:sticky;left:0;background:var(--surface,#fff);}
+.supplier-comparison th small{display:block;font-weight:400;}

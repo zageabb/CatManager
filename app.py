@@ -1307,6 +1307,26 @@ def create_app(test_config=None):
                                dashboard_widgets=calculate_dashboard_widgets(panel["data"]["panel"]),
                                supplier_widgets=supplier_widgets, supplier_widget_rows=supplier_widget_rows)
 
+    @app.route("/panels/<panel_id>/suppliers/compare")
+    def supplier_compare(panel_id):
+        panel = get_panel_or_404(panel_id)
+        core = panel["data"]["panel"]
+        ids = request.args.getlist("supplier_id")
+        if not 2 <= len(ids) <= 5 or len(ids) != len(set(ids)):
+            flash("Select 2 to 5 different suppliers to compare.", "error")
+            return redirect(url_for("panel_view", panel_id=panel_id))
+        by_id = {s["supplierId"]: s for s in core.get("suppliers", [])}
+        if any(sid not in by_id for sid in ids):
+            from flask import abort
+            abort(400)
+        selected = [by_id[sid] for sid in ids]
+        widget_defs, widget_rows = calculate_supplier_widgets(core)
+        original_index = {s["supplierId"]: i for i, s in enumerate(core.get("suppliers", []))}
+        calculated = {sid: widget_rows[original_index[sid]] for sid in ids}
+        return render_template("supplier_compare.html", panel=panel, suppliers=selected,
+                               fields=sorted(core.get("supplierFields", []), key=lambda f: f.get("order", 0)),
+                               widgets=widget_defs, calculated=calculated)
+
     @app.route("/panels/<panel_id>/suppliers/excel", methods=["GET", "POST"])
     def supplier_excel_exchange(panel_id):
         panel = get_panel_or_404(panel_id)
