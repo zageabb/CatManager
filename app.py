@@ -1328,6 +1328,8 @@ def create_app(test_config=None):
             custom = supplier.setdefault("customFields", {})
             for field in data["panel"].get("supplierFields",[]):
                 value = request.form.get(f"custom_{field['fieldId']}","")
+                if field["type"] == "boolean":
+                    value = True if value == "true" else False if value == "false" else None
                 if field["type"] == "number" and value != "":
                     try:
                         value = float(value)
