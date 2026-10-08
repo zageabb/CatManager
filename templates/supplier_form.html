@@ -6,6 +6,8 @@
   <label>{{ f.fieldName }}{{ ' *' if f.required }}
   {% if f.type=='boolean' %}
     <select name="custom_{{ f.fieldId }}" {{ 'required' if f.required }}><option value="" {{ 'selected' if current is none or current=='' }}>Not assessed</option><option value="true" {{ 'selected' if current is sameas true }}>Yes</option><option value="false" {{ 'selected' if current is sameas false }}>No</option></select>
+  {% elif f.type=='stars' %}
+    <input name="custom_{{ f.fieldId }}" type="number" min="0" max="5" step="0.5" value="{{ current if current is not none else '' }}" {{ 'required' if f.required }} aria-label="{{ f.fieldName }} rating out of 5">
   {% elif f.type=='dropdown' %}
     <select name="custom_{{ f.fieldId }}" {{ 'required' if f.required }}><option value="">Select…</option>{% for o in f.options %}<option {{ 'selected' if current==o }}>{{ o }}</option>{% endfor %}</select>
   {% else %}
