@@ -943,3 +943,30 @@ def test_duplicate_panel_preserves_configuration_but_not_suppliers_or_history(cl
         "business": "GI", "region_level": "Country", "owner": "Test Owner",
         "mdf_codes": ["MDF-TR-001"], "lead_mdf_code": "MDF-TR-001",
     }).status_code == 409
+
+def test_field_template_library_creates_independent_field_definitions(client):
+    create_panel(client, "CMP-LIB")
+    template = {"fieldName": "Cooling Type", "type": "dropdown",
+                "options": ["ONAN", "ONAF"], "required": False}
+    response = client.post("/api/field-templates", json=template)
+    assert response.status_code == 201
+    template_id = response.get_json()["templateId"]
+    library = client.get("/api/field-templates").get_json()
+    assert any(item["templateId"] == template_id for item in library)
+    assert b"Select predefined field" in client.get("/panels/CMP-LIB/configuration").data
+    assert client.post("/api/field-templates", json={"fieldName": "", "type": "number"}).status_code == 400
+
+    fields = [{"fieldId": "cooling_copy", **template, "groupId": ""}]
+    response = client.post("/panels/CMP-LIB/configuration", data={
+        "field_groups_json": "[]", "fields_json": json.dumps(fields),
+    })
+    assert response.status_code == 302
+    panel_field = client.get("/api/panels/CMP-LIB").get_json()["panel"]["supplierFields"][0]
+    assert panel_field["fieldId"] == "cooling_copy"
+    assert panel_field["options"] == ["ONAN", "ONAF"]
+    # Updating a panel's field never modifies its central reusable template.
+    fields[0]["options"].append("OFAF")
+    client.post("/panels/CMP-LIB/configuration", data={
+        "field_groups_json": "[]", "fields_json": json.dumps(fields),
+    })
+    assert client.get("/api/field-templates").get_json()[0]["options"] == ["ONAN", "ONAF"]
