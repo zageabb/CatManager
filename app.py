@@ -156,8 +156,13 @@ def create_app(test_config=None):
                         field.setdefault("groupId", "")
                     payload["schemaVersion"] = 4
                     metadata = core.setdefault("metadata", {})
-                    metadata["version"] = max(int(metadata.get("version", 1)), 4)
+                    metadata["version"] = max(int(metadata.get("version", 1)), 5)
                     metadata.setdefault("schema4MigratedAt", ts)
+                    changed = True
+                if int(payload.get("schemaVersion", 1)) < 5:
+                    core.setdefault("dashboardWidgets", [])
+                    payload["schemaVersion"] = 5
+                    core.setdefault("metadata", {})["version"] = max(int(core["metadata"].get("version", 1)), 5)
                     changed = True
                 if changed:
                     db.execute("UPDATE panels SET data_json=? WHERE id=?", (json.dumps(payload), row["id"]))
@@ -174,7 +179,7 @@ def create_app(test_config=None):
         metadata["version"] = max(int(metadata.get("version", 1)), 4)
         metadata.setdefault("auditTrail", [])
         return {
-            "schemaVersion": 4,
+            "schemaVersion": 5,
             "panel": {
                 "panelId": panel_id,
                 "panelName": panel_name,
@@ -187,6 +192,7 @@ def create_app(test_config=None):
                 "mdfCodes": list(mdf_codes),
                 "fieldGroups": field_groups,
                 "supplierFields": fields,
+                "dashboardWidgets": [],
                 "suppliers": suppliers,
                 "metadata": metadata,
             },
@@ -417,7 +423,7 @@ def create_app(test_config=None):
             raise ValueError("JSON must contain a panel object.")
         data = json.loads(json.dumps(payload))
         version = int(data.get("schemaVersion", 1))
-        if version > 4:
+        if version > 5:
             raise ValueError(f"Unsupported schemaVersion {version}.")
         core = data["panel"]
         metadata = core.setdefault("metadata", {})
@@ -433,7 +439,9 @@ def create_app(test_config=None):
             core.setdefault("fieldGroups", [])
             for field in core.get("supplierFields", []):
                 field.setdefault("groupId", "")
-        data["schemaVersion"] = 4
+        if version < 5:
+            core.setdefault("dashboardWidgets", [])
+        data["schemaVersion"] = 5
         metadata["version"] = max(int(metadata.get("version", 1)), 4)
         required = ["panelId","panelName","category","business","region","panelOwner","fieldGroups","supplierFields","suppliers","leadMdfCode","mdfCodes"]
         if not all(k in core for k in required):
@@ -454,6 +462,7 @@ def create_app(test_config=None):
                         field["groupId"] = ""
             else:
                 raise ValueError("Custom fields reference unknown field groups: " + ", ".join(unknown_groups))
+        core["dashboardWidgets"] = parse_dashboard_widgets(json.dumps(core.get("dashboardWidgets", [])), core["supplierFields"])
         if not isinstance(core.get("suppliers"), list):
             raise ValueError("suppliers must be a list.")
         return data
@@ -1129,7 +1138,7 @@ def create_app(test_config=None):
         return None
 
     def append_audit(data, action, entity_id, details=None):
-        data["schemaVersion"] = max(int(data.get("schemaVersion", 1)), 4)
+        data["schemaVersion"] = max(int(data.get("schemaVersion", 1)), 5)
         metadata = data["panel"].setdefault("metadata", {})
         metadata["version"] = max(int(metadata.get("version", 1)), 4)
         metadata["updatedAt"] = now_iso()
