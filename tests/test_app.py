@@ -1899,3 +1899,25 @@ def test_bug049_widget_js_sends_csrf_and_checks_content_type():
     source=(Path(__file__).resolve().parents[1]/"static"/"app.js").read_text()
     assert '"X-CSRF-Token":widgetRoot.dataset.csrfToken' in source
     assert 'contentType.includes("application/json")' in source
+
+def test_ux051_supplier_tab_default_and_secondary_views(client):
+    create_panel(client,"CMP-UX051")
+    default=client.get("/panels/CMP-UX051")
+    assert default.status_code==200
+    html=default.get_data(as_text=True)
+    assert 'aria-current="page">Suppliers' in html
+    assert '<h2>Suppliers</h2>' in html
+    assert '<h2>Supplier coverage and sourcing concentration</h2>' not in html
+    assert 'More actions' in html
+    for name in ("Edit Panel","Panel Configuration","Add Supplier",
+                 "Management Excel Report","Sync Supplier Master","Save Template"):
+        assert name in html
+    for tab, heading in (
+        ("overview","Supplier coverage and sourcing concentration"),
+        ("actions","Qualification review alerts"),
+        ("history","Panel activity history"),
+    ):
+        response=client.get("/panels/CMP-UX051?tab="+tab)
+        assert response.status_code==200
+        assert heading in response.get_data(as_text=True)
+    assert b'<h2>Suppliers</h2>' in client.get("/panels/CMP-UX051?tab=unrecognised").data
