@@ -1753,3 +1753,35 @@ def test_dev045_supplier_profile_joins_exact_id_across_panels(client):
     assert "Profile" in client.get("/panels/CMP-PROFILE-A").get_data(as_text=True)
     assert client.get("/api/panels/CMP-PROFILE-A").get_json()==before_a
     assert client.get("/suppliers/UNKNOWN/profile").status_code==404
+
+def test_dev046_quality_checks_find_missing_invalid_orphan_fields():
+    from data_quality import inspect_panel
+    core={"supplierFields":[
+        {"fieldId":"rating","fieldName":"Rating","type":"stars","required":True},
+        {"fieldId":"regions","fieldName":"Regions","type":"multiselect_blocks","options":["EU","MEA"]},
+    ],"dashboardWidgets":[{"title":"Broken","fieldId":"retired"}],
+    "scoringCriteria":[{"fieldId":"retired","weight":1}],
+    "suppliers":[
+        {"supplierId":"A","supplierName":"Alpha","customFields":{"rating":6,"regions":["EU","UNKNOWN"],"legacy":"old"}},
+        {"supplierId":"B","supplierName":"Beta","customFields":{}},
+    ]}
+    findings=inspect_panel(core)
+    codes=[x["code"] for x in findings]
+    assert "broken_widget" in codes
+    assert "broken_score" in codes
+    assert "invalid_value" in codes
+    assert "invalid_region" in codes
+    assert "orphan_value" in codes
+    assert "missing_required" in codes
+    assert inspect_panel({"supplierFields":[],"suppliers":[]})==[]
+
+
+def test_dev046_data_quality_page_read_only(client):
+    create_panel(client,"CMP-QUALITY")
+    before=client.get("/api/panels/CMP-QUALITY").get_json()
+    page=client.get("/data-quality")
+    assert page.status_code==200
+    assert b"Data quality dashboard" in page.data
+    assert b"CMP-QUALITY" in page.data
+    assert b"Data Quality" in client.get("/").data
+    assert client.get("/api/panels/CMP-QUALITY").get_json()==before
