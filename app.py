@@ -343,7 +343,8 @@ def create_app(test_config=None):
             clean.append({"widgetId": str(widget.get("widgetId") or uuid4().hex),
                           "title": title, "metric": metric, "fieldId": field,
                           "otherFieldId": other, "match": str(widget.get("match", ""))[:100],
-                          "format": widget.get("format") if widget.get("format") in ("number","currency","percentage") else "number"})
+                          "format": widget.get("format") if widget.get("format") in ("number","currency","percentage") else "number",
+                          "display": widget.get("display") if widget.get("display") in ("panel","supplier","both") else "panel"})
         return clean
 
     def calculate_dashboard_widgets(core):
@@ -409,6 +410,57 @@ def create_app(test_config=None):
                             "metric": metric, "format": widget.get("format", "number"),
                             "currencyPrefix": prefix, "excluded": excluded})
         return results
+
+    def calculate_supplier_widgets(core):
+        """Evaluate KPI definitions against each supplier independently; never persist results."""
+        config = get_dashboard_config()
+        prefix = {"GBP": "£", "EUR": "€", "USD": "$"}.get(
+            config["baseCurrency"], config["baseCurrency"] + " "
+        )
+        widgets = [w for w in core.get("dashboardWidgets", [])[:6]
+                   if w.get("display", "panel") in ("supplier", "both")]
+        rows = []
+        for supplier in core.get("suppliers", []):
+            custom = supplier.get("customFields", {})
+            def raw(field_id):
+                return supplier.get(field_id) if field_id in ("supplierId", "supplierName") else custom.get(field_id)
+            def number(field_id):
+                v = raw(field_id)
+                if isinstance(v, bool) or v is None or v == "":
+                    return None
+                if field_id == config["spendFieldId"]:
+                    n = convert_spend(v, custom.get(config["currencyFieldId"]), config)
+                else:
+                    try:
+                        n = float(v)
+                    except (ValueError, TypeError, OverflowError):
+                        return None
+                return n if n is not None and n == n and abs(n) != float("inf") else None
+            values = []
+            for w in widgets:
+                metric = w["metric"]
+                field_id = w.get("fieldId", "")
+                n = number(field_id)
+                result = None
+                if metric == "count":
+                    result = 1
+                elif metric == "count_where":
+                    v = raw(field_id)
+                    result = int(v is not None and str(v).lower() == w.get("match", "").strip().lower())
+                elif metric == "distinct":
+                    v = raw(field_id)
+                    result = int(v is not None and v != "")
+                elif metric in ("sum", "average", "minimum", "maximum"):
+                    result = n
+                elif metric in ("ratio", "percentage"):
+                    denominator = number(w.get("otherFieldId", ""))
+                    if n is not None and denominator not in (None, 0):
+                        result = n / denominator * (100 if metric == "percentage" else 1)
+                values.append({"value": result, "metric": metric,
+                               "format": w.get("format", "number"),
+                               "currencyPrefix": prefix})
+            rows.append(values)
+        return widgets, rows
 
     def parse_field_groups(raw):
         try:
@@ -1225,8 +1277,10 @@ def create_app(test_config=None):
     @app.route("/panels/<panel_id>")
     def panel_view(panel_id):
         panel = get_panel_or_404(panel_id)
+        supplier_widgets, supplier_widget_rows = calculate_supplier_widgets(panel["data"]["panel"])
         return render_template("panel_view.html", panel=panel,
-                               dashboard_widgets=calculate_dashboard_widgets(panel["data"]["panel"]))
+                               dashboard_widgets=calculate_dashboard_widgets(panel["data"]["panel"]),
+                               supplier_widgets=supplier_widgets, supplier_widget_rows=supplier_widget_rows)
 
     @app.route("/panels/<panel_id>/fields/orphans")
     def orphan_fields(panel_id):
