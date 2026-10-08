@@ -527,6 +527,45 @@
     });
   });
 
+
+  // DEV-038: configurable weighted assessment fields.
+  const scoreRoot=document.querySelector("#scoring-rules");
+  const scoreData=document.querySelector("#scoring-criteria-json");
+  const addScore=document.querySelector("#add-scoring-rule");
+  if(scoreRoot && scoreData && addScore){
+    let scoreRules=parseValue(scoreData);
+    const eligible=JSON.parse(scoreRoot.dataset.fields||"[]").filter(f=>["stars","number"].includes(f.type));
+    function syncScores(){scoreData.value=JSON.stringify(scoreRules);}
+    function renderScores(){
+      scoreRoot.replaceChildren();
+      scoreRules.forEach((rule,index)=>{
+        const row=document.createElement("div");row.className="supplier-score-rule";
+        const source=document.createElement("select");source.setAttribute("aria-label","Scoring source field");
+        source.appendChild(new Option("Choose assessment field",""));
+        eligible.forEach(f=>source.appendChild(new Option(f.fieldName+" ("+f.fieldId+")",f.fieldId)));
+        source.value=rule.fieldId||"";
+        source.addEventListener("change",()=>{rule.fieldId=source.value;syncScores();});
+        const weight=document.createElement("input");
+        weight.type="number";weight.min="0.01";weight.max="1000";weight.step="0.01";
+        weight.value=rule.weight;weight.setAttribute("aria-label","Scoring weight");
+        weight.addEventListener("input",()=>{rule.weight=weight.value;syncScores();});
+        const remove=document.createElement("button");remove.type="button";
+        remove.className="btn compact danger";remove.textContent="Remove";
+        remove.addEventListener("click",()=>{scoreRules.splice(index,1);renderScores();syncScores();});
+        row.append(source,weight,remove);scoreRoot.appendChild(row);
+      });
+      addScore.disabled=scoreRules.length>=12 || eligible.length===0;
+    }
+    addScore.addEventListener("click",()=>{
+      if(scoreRules.length>=12)return;
+      const candidate=eligible.find(f=>!scoreRules.some(r=>r.fieldId===f.fieldId));
+      if(!candidate)return;
+      scoreRules.push({fieldId:candidate.fieldId,weight:1});
+      renderScores();syncScores();
+    });
+    renderScores();
+  }
+
   document.querySelectorAll("[data-copy]").forEach(function(btn){
     btn.addEventListener("click",async function(){const el=document.querySelector(btn.dataset.copy);if(!el)return;await navigator.clipboard.writeText(el.value||el.textContent||"");const old=btn.textContent;btn.textContent="Copied";setTimeout(function(){btn.textContent=old;},1200);});
   });
