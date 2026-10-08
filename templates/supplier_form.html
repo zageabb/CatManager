@@ -21,7 +21,7 @@
 {% set core=panel.data.panel %}
 {% set group_ids = core.get('fieldGroups', [])|map(attribute='groupId')|list %}
 <div class="page-title-row"><div><h1>{{ 'Edit supplier' if supplier else 'Add supplier' }}</h1><p class="subtitle">{{ core.panelName }}</p></div></div>
-<form method="post" class="form-card supplier-form">
+<form method="post" class="form-card supplier-form" data-unsaved-guard>
   <section class="supplier-field-section">
     <h2>Supplier details</h2>
     {% if not supplier %}
