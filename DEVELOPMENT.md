@@ -216,8 +216,12 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
   - Fix: pass server-provided session CSRF token in X-CSRF-Token for JSON preview requests and detect non-JSON HTTP responses. Regression tests verified CSRF-enabled panel creation, rejected tokenless preview and successful token-authenticated JSON preview. PR CI 37851308714 passed at cb1eaca291e6fc283c4d8202f83b2ab7f00b0fcf.
 
 ## Approved future UX redesign — supplier-first panel (documentation only)
-- [ ] **UX-051** Supplier workspace as default panel view; three primary actions and grouped overflow menu; tab sections for intelligence. Specification: [Supplier-first UX spec](docs/SUPPLIER_FIRST_PANEL_UX_SPEC.md).
+- [x] **UX-051** Supplier workspace as default panel view; three primary actions and grouped overflow menu; tab sections for intelligence. Specification: [Supplier-first UX spec](docs/SUPPLIER_FIRST_PANEL_UX_SPEC.md).
 - [ ] **UX-052** Supplier-first table polish (compact KPI strip, search/filter/column settings, row menus, responsive wide fields).
 - [ ] **UX-053** Card-based Panel Configuration hub, with existing workflows preserved and focused sections introduced incrementally.
 - [ ] **UX-054** Accessibility, CSRF/security regression, layout smoke tests, screenshots and release notes.
   - Implementation guide: [Supplier-first implementation plan](docs/SUPPLIER_FIRST_PANEL_IMPLEMENTATION.md). **These are approved plans, NOT completed development. Do not change live UI in this docs-only change.**
+
+### UX-051 implementation — in progress
+- [x] Reorder supplier content first, add tab navigation, keep edit/configuration/add supplier and move secondary actions to grouped menu; preserve existing endpoints, tests, and CI.
+  - Evidence: supplier list and compact configured KPI strip default, header Edit Panel / Panel Configuration / Add Supplier, grouped actions overflow, and Overview, Dashboard, Scoring, Actions, History server-selected tabs. Existing KPI/scoring/coverage regression tests were redirected to relevant tab; all tests passed in CI run 37855882265 on ed640a8a189d1df485ac465cce27c040adb0f807. UX-052–054 remain future stages.

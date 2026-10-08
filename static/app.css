@@ -168,3 +168,21 @@
 [data-supplier-table] th:nth-child(3),[data-supplier-table] td:nth-child(3){position:sticky;left:115px;background:var(--surface,#fff);z-index:2;}
 .supplier-comparison th:first-child{position:sticky;left:0;background:var(--surface,#fff);}
 .supplier-comparison th small{display:block;font-weight:400;}
+
+/* UX-051: supplier-first panel workspace and grouped actions */
+.panel-header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.panel-actions-menu{position:relative;z-index:20}
+.panel-actions-menu>summary{list-style:none;cursor:pointer}
+.panel-actions-menu>summary::-webkit-details-marker{display:none}
+.panel-actions-dropdown{position:absolute;right:0;top:calc(100% + 8px);width:min(330px,calc(100vw - 32px));max-height:70vh;overflow-y:auto;display:flex;flex-direction:column;gap:4px;padding:12px;border:1px solid #dbe2e9;border-radius:12px;background:#fff;box-shadow:0 16px 32px rgba(15,31,48,.16)}
+.panel-actions-dropdown>a,.panel-actions-dropdown>form{display:block;padding:8px 10px;color:#263546;font-size:14px;border-radius:6px}
+.panel-actions-dropdown>a:hover,.panel-actions-dropdown>form:hover{background:#f4f7fa}
+.panel-actions-dropdown strong{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#586a7b;padding:12px 10px 3px;border-top:1px solid #e8edf2}
+.panel-actions-dropdown strong:first-child{border-top:0;padding-top:4px}
+.panel-actions-dropdown label{display:block}
+.panel-actions-dropdown input{display:block;max-width:100%;width:100%;box-sizing:border-box;margin:5px 0}
+.panel-tab-nav{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid #e0e5ec;margin:8px 0 20px}
+.panel-tab{display:inline-flex;padding:12px 15px;border-bottom:3px solid transparent;text-decoration:none;color:#5c6979;font-weight:600}
+.panel-tab:hover,.panel-tab:focus-visible{color:#172f4f;background:#f6f8fb}
+.panel-tab.is-active{border-bottom-color:#d93477;color:#202d3e}
+@media(max-width:760px){.panel-header-actions{width:100%}.panel-actions-dropdown{position:fixed;left:12px;right:12px;top:auto;width:auto;max-height:62vh}.panel-tab-nav{flex-wrap:nowrap;overflow-x:auto}.panel-tab{white-space:nowrap;padding:11px 10px}}

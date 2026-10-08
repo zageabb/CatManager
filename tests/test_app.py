@@ -1476,7 +1476,7 @@ def test_dev038_panel_scoring_saved_and_displayed(client):
     assert client.post("/panels/CMP-SCORE/suppliers/new",data={
         "supplier_id":"S1","supplier_name":"Supplier One","custom_rating":"4.5"
     }).status_code==302
-    page=client.get("/panels/CMP-SCORE")
+    page=client.get("/panels/CMP-SCORE?tab=scoring")
     assert b"Weighted supplier scores" in page.data
     assert b"4.5 / 5" in page.data
     invalid=client.post("/panels/CMP-SCORE/configuration",data={
@@ -1566,7 +1566,7 @@ def test_dev040_review_alert_classification_and_actions():
 
 def test_dev040_panel_renders_qualification_alerts(client):
     create_panel(client,"CMP-ALERT")
-    response=client.get("/panels/CMP-ALERT")
+    response=client.get("/panels/CMP-ALERT?tab=actions")
     assert response.status_code==200
     assert b"Qualification review alerts" in response.data
     assert b"No qualification reviews or actions require attention." in response.data
@@ -1593,7 +1593,7 @@ def test_dev041_coverage_concentration_and_qualification():
 
 def test_dev041_panel_coverage_renders_without_configured_regions(client):
     create_panel(client,"CMP-COVERAGE")
-    response=client.get("/panels/CMP-COVERAGE")
+    response=client.get("/panels/CMP-COVERAGE?tab=overview")
     assert response.status_code==200
     assert b"Supplier coverage and sourcing concentration" in response.data
     assert b"No multi-select coverage field is configured." in response.data
@@ -1899,3 +1899,25 @@ def test_bug049_widget_js_sends_csrf_and_checks_content_type():
     source=(Path(__file__).resolve().parents[1]/"static"/"app.js").read_text()
     assert '"X-CSRF-Token":widgetRoot.dataset.csrfToken' in source
     assert 'contentType.includes("application/json")' in source
+
+def test_ux051_supplier_tab_default_and_secondary_views(client):
+    create_panel(client,"CMP-UX051")
+    default=client.get("/panels/CMP-UX051")
+    assert default.status_code==200
+    html=default.get_data(as_text=True)
+    assert 'aria-current="page">Suppliers' in html
+    assert '<h2>Suppliers</h2>' in html
+    assert '<h2>Supplier coverage and sourcing concentration</h2>' not in html
+    assert 'More actions' in html
+    for name in ("Edit Panel","Panel Configuration","Add Supplier",
+                 "Management Excel Report","Sync Supplier Master","Save Template"):
+        assert name in html
+    for tab, heading in (
+        ("overview","Supplier coverage and sourcing concentration"),
+        ("actions","Qualification review alerts"),
+        ("history","Panel activity history"),
+    ):
+        response=client.get("/panels/CMP-UX051?tab="+tab)
+        assert response.status_code==200
+        assert heading in response.get_data(as_text=True)
+    assert b'<h2>Suppliers</h2>' in client.get("/panels/CMP-UX051?tab=unrecognised").data

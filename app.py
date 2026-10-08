@@ -1409,7 +1409,10 @@ def create_app(test_config=None):
     def panel_view(panel_id):
         panel = get_panel_or_404(panel_id)
         supplier_widgets, supplier_widget_rows = calculate_supplier_widgets(panel["data"]["panel"])
-        return render_template("panel_view.html", panel=panel,
+        active_tab = request.args.get("tab", "suppliers")
+        if active_tab not in ("suppliers", "overview", "dashboard", "scoring", "actions", "history"):
+            active_tab = "suppliers"
+        return render_template("panel_view.html", panel=panel, active_tab=active_tab,
                                dashboard_widgets=calculate_dashboard_widgets(panel["data"]["panel"]),
                                supplier_widgets=supplier_widgets, supplier_widget_rows=supplier_widget_rows,
                                supplier_scores=score_suppliers(panel["data"]["panel"]),
