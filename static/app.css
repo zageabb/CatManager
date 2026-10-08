@@ -132,3 +132,10 @@
 .star-rating-track{position:relative;display:inline-block;color:#c5cbd3;font-size:1.12rem;letter-spacing:.02em;line-height:1;}
 .star-rating-fill{position:absolute;left:0;top:0;color:#db9c17;overflow:hidden;white-space:nowrap;}
 .star-rating-number{font-size:.8rem;font-weight:600;color:inherit;}
+
+.multi-block-display{display:inline-flex;white-space:nowrap;gap:2px;max-width:100%;}
+.multi-block-segment{padding:.3rem .4rem;min-width:2.5rem;text-align:center;font-size:.75rem;font-weight:700;border-radius:2px;}
+.multi-block-active{background:#247b4a;color:#fff;}
+.multi-block-inactive{background:#e1e5ea;color:#596675;}
+.multi-block-options{display:flex;flex-wrap:wrap;gap:.45rem .75rem;}
+.multi-block-check{display:inline-flex!important;align-items:center;gap:.25rem;font-weight:500;white-space:nowrap;}
