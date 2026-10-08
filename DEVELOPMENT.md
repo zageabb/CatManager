@@ -214,3 +214,8 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 ### BUG-049 — KPI preview JSON failure after CSRF rollout
 - [x] Panel Configuration KPI live preview must supply session CSRF token on its JSON POST, return a clear error for non-JSON responses, and continue to work under enforced CSRF. Add an end-to-end regression and re-run CI before merge.
   - Fix: pass server-provided session CSRF token in X-CSRF-Token for JSON preview requests and detect non-JSON HTTP responses. Regression tests verified CSRF-enabled panel creation, rejected tokenless preview and successful token-authenticated JSON preview. PR CI 37851308714 passed at cb1eaca291e6fc283c4d8202f83b2ab7f00b0fcf.
+
+### UX-050 — Simplify panel header with grouped actions menu
+- [x] Reduce visible actions to core panel editing, configuration and add supplier. Move reporting, imports/exports, maintenance, history, templates, duplicate, supplier bulk-edit and archive/restore to accessible native grouped dropdown in panel header. Retain all capabilities; ensure mobile usability and test links/CSRF under configuration. Validate CI before main merge.
+
+  - Evidence: native `details` overflow menu now groups reports/data, supplier maintenance, and panel management; visible header retains Edit Panel, Panel Configuration and Add Supplier. Existing routes/actions including Excel import, template saving and archive remain available. Tests covering menu links and CSRF-enabled form rendering passed in PR CI 37851874180 at 45db8a028ca6ebd306e5aecf6d9a171383617f49.

@@ -1899,3 +1899,36 @@ def test_bug049_widget_js_sends_csrf_and_checks_content_type():
     source=(Path(__file__).resolve().parents[1]/"static"/"app.js").read_text()
     assert '"X-CSRF-Token":widgetRoot.dataset.csrfToken' in source
     assert 'contentType.includes("application/json")' in source
+
+def test_panel_action_menu_retains_features_and_core_buttons(client):
+    create_panel(client, "CMP-MENU")
+    page=client.get("/panels/CMP-MENU")
+    assert page.status_code==200
+    html=page.get_data(as_text=True)
+    header=html.split('<div class="actions panel-header-actions">',1)[1].split('<section class="details-card">',1)[0]
+    assert '<details class="panel-actions-menu">' in header
+    assert "More actions" in header
+    assert "Edit Panel</a>" in header
+    assert "Panel Configuration</a>" in header
+    assert "Add Supplier</a>" in header
+    for route in ("/management-report.xlsx","/management-report","/suppliers/master-sync",
+                  "/suppliers/bulk-edit","/duplicate","/save-template","/archive"):
+        assert route in header
+    assert 'enctype="multipart/form-data"' in header
+
+
+def test_panel_menu_form_csrf_tokens(tmp_path):
+    import re
+    secure=create_app({"TESTING":True,"DATABASE":str(tmp_path/"menu.sqlite"),
+        "SEED_DEMO":False,"SECRET_KEY":"menu-secret","CSRF_ENABLED":True})
+    with secure.test_client() as c:
+        form=c.get("/panels/new")
+        token=re.search(rb'name="_csrf_token" value="([^"]+)"',form.data).group(1).decode()
+        values={"panel_id":"CMP-SEC-MENU","panel_name":"Menu","category":"Transformers",
+            "business":"GI","region_level":"Country","region_value":"UK","owner":"Owner",
+            "mdf_codes":["MDF-TR-001"],"lead_mdf_code":"MDF-TR-001","fields_json":"[]",
+            "_csrf_token":token}
+        assert c.post("/panels/new",data=values).status_code==302
+        page=c.get("/panels/CMP-SEC-MENU")
+        assert page.status_code==200
+        assert page.data.count(b'name="_csrf_token"')>=3
