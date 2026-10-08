@@ -804,6 +804,17 @@ def create_app(test_config=None):
             return save_panel()
         return render_template("panel_form.html",panel=None)
 
+    @app.route("/panels/<panel_id>/duplicate", methods=["GET", "POST"])
+    def panel_duplicate(panel_id):
+        source = get_panel_or_404(panel_id)
+        if request.method == "POST":
+            return save_panel(source=source)
+        prefill = dict(source)
+        prefill["panel_id"] = ""
+        prefill["panel_name"] = "Copy of " + source["panel_name"]
+        return render_template("panel_form.html", panel=None, prefill=prefill,
+                               duplicate_source=source)
+
     @app.route("/panels/<panel_id>/edit", methods=["GET","POST"])
     def panel_edit(panel_id):
         panel = get_panel_or_404(panel_id)
@@ -818,7 +829,7 @@ def create_app(test_config=None):
             return save_panel_configuration(panel)
         return render_template("panel_configuration.html", panel=panel)
 
-    def save_panel(existing=None):
+    def save_panel(existing=None, source=None):
         panel_id = request.form.get("panel_id","").strip()
         panel_name = request.form.get("panel_name","").strip()
         category = request.form.get("category","")
@@ -836,7 +847,7 @@ def create_app(test_config=None):
             return render_template("panel_form.html",panel=existing),400
         active_mdf = {m["code"] for m in get_mdf_codes()}
         existing_mdf = set(existing["data"]["panel"].get("mdfCodes", [existing.get("mdf_code")]) if existing else [])
-        allowed_mdf = active_mdf | existing_mdf
+        allowed_mdf = active_mdf | existing_mdf | set(source["data"]["panel"].get("mdfCodes", []) if source else [])
         if any(code not in allowed_mdf for code in mdf_codes) or lead_mdf_code not in mdf_codes:
             flash("Select one or more valid MDF codes and choose the lead MDF from those selected.","error")
             return render_template("panel_form.html",panel=existing),400
@@ -847,9 +858,9 @@ def create_app(test_config=None):
         value = region_value or region_level
         existing_metadata = json.loads(json.dumps(existing["data"]["panel"].get("metadata", {}))) if existing else None
 
-        if existing:
-            field_groups = json.loads(json.dumps(existing["data"]["panel"].get("fieldGroups", [])))
-            fields = json.loads(json.dumps(existing["data"]["panel"].get("supplierFields", [])))
+        if existing or source:
+            field_groups = json.loads(json.dumps((existing or source)["data"]["panel"].get("fieldGroups", [])))
+            fields = json.loads(json.dumps((existing or source)["data"]["panel"].get("supplierFields", [])))
         else:
             try:
                 field_groups = parse_field_groups(request.form.get("field_groups_json","[]"))
@@ -863,12 +874,21 @@ def create_app(test_config=None):
                 return render_template("panel_form.html",panel=existing),400
 
         payload = build_panel_payload(panel_id,panel_name,category,business,region_level,value,owner,mdf_codes,lead_mdf_code,field_groups,fields,suppliers,created_at,existing_metadata)
+        if source:
+            # A duplicate is a fresh aggregate: no supplier records, history or orphaned values.
+            # Carry over optional panel configuration such as future KPI widget definitions.
+            source_core = source["data"]["panel"]
+            for key in ("dashboardWidgets",):
+                if key in source_core:
+                    payload["panel"][key] = json.loads(json.dumps(source_core[key]))
+            payload["panel"]["suppliers"] = []
         if existing:
             changes = panel_change_summary(existing["data"], payload)
             if changes:
                 append_audit(payload, "panel_updated", panel_id, {"changes": changes})
         else:
-            append_audit(payload, "panel_created", panel_id, {
+            append_audit(payload, "panel_duplicated" if source else "panel_created", panel_id, {
+                **({"sourcePanelId": source["panel_id"]} if source else {}),
                 "panelName": panel_name,
                 "category": category,
                 "business": business,
