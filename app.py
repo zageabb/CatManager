@@ -25,7 +25,7 @@ CATEGORIES = [
 ]
 BUSINESSES = ["GI", "GA", "GPQSS", "HVDC"]
 REGION_LEVELS = ["Global", "Region", "HUB", "Country"]
-FIELD_TYPES = ["number", "text", "dropdown", "date", "boolean"]
+FIELD_TYPES = ["number", "text", "dropdown", "date", "boolean", "stars"]
 DEFAULT_MDF_CODES = [
     {"code": "3GF", "description": "Grid equipment"},
     {"code": "MDF-TR-001", "description": "Power Transformers"},
@@ -143,6 +143,7 @@ def create_app(test_config=None):
             ("standard_voltage", "Rated Voltage (kV)", "number", []),
             ("standard_cooling", "Cooling Type", "dropdown", ["ONAN", "ONAF", "OFAF", "ODAF"]),
             ("standard_approved", "Approved", "boolean", []),
+            ("standard_quality_rating", "Supplier Quality Rating", "stars", []),
         ):
             db.execute(
                 "INSERT OR IGNORE INTO field_templates(template_id,field_name,field_type,options_json,required,updated_at) VALUES(?,?,?,?,?,?)",
@@ -343,7 +344,7 @@ def create_app(test_config=None):
             clean.append({"widgetId": str(widget.get("widgetId") or uuid4().hex),
                           "title": title, "metric": metric, "fieldId": field,
                           "otherFieldId": other, "match": str(widget.get("match", ""))[:100],
-                          "format": widget.get("format") if widget.get("format") in ("number","currency","percentage") else "number",
+                          "format": widget.get("format") if widget.get("format") in ("number","currency","percentage","stars") else "number",
                           "display": widget.get("display") if widget.get("display") in ("panel","supplier","both") else "panel"})
         return clean
 
@@ -1388,6 +1389,15 @@ def create_app(test_config=None):
                 value = request.form.get(f"custom_{field['fieldId']}","")
                 if field["type"] == "boolean":
                     value = True if value == "true" else False if value == "false" else None
+                if field["type"] == "stars" and value != "":
+                    try:
+                        rating = float(value)
+                        if not (0 <= rating <= 5 and rating * 2 == int(rating * 2)):
+                            raise ValueError()
+                        value = rating
+                    except (ValueError, OverflowError):
+                        flash(f"{field['fieldName']} must be 0–5 in steps of 0.5.", "error")
+                        return render_template("supplier_bulk_edit.html" if "supplier_id" in locals() and "fields" in locals() else "supplier_form.html", panel=panel, supplier=locals().get("previous")), 400
                 if field["type"] == "number" and value != "":
                     try: value = float(value)
                     except ValueError:
@@ -1423,6 +1433,15 @@ def create_app(test_config=None):
                 value = request.form.get(f"custom_{field['fieldId']}","")
                 if field["type"] == "boolean":
                     value = True if value == "true" else False if value == "false" else None
+                if field["type"] == "stars" and value != "":
+                    try:
+                        rating = float(value)
+                        if not (0 <= rating <= 5 and rating * 2 == int(rating * 2)):
+                            raise ValueError()
+                        value = rating
+                    except (ValueError, OverflowError):
+                        flash(f"{field['fieldName']} must be 0–5 in steps of 0.5.", "error")
+                        return render_template("supplier_bulk_edit.html" if "supplier_id" in locals() and "fields" in locals() else "supplier_form.html", panel=panel, supplier=locals().get("previous")), 400
                 if field["type"] == "number" and value != "":
                     try:
                         value = float(value)
@@ -1453,7 +1472,16 @@ def create_app(test_config=None):
                     value = request.form.get(key, "")
                     if field["type"] == "boolean":
                         value = True if value == "true" else False if value == "false" else None
-                    if field["type"] == "number" and value != "":
+                    if field["type"] == "stars" and value != "":
+                    try:
+                        rating = float(value)
+                        if not (0 <= rating <= 5 and rating * 2 == int(rating * 2)):
+                            raise ValueError()
+                        value = rating
+                    except (ValueError, OverflowError):
+                        flash(f"{field['fieldName']} must be 0–5 in steps of 0.5.", "error")
+                        return render_template("supplier_bulk_edit.html" if "supplier_id" in locals() and "fields" in locals() else "supplier_form.html", panel=panel, supplier=locals().get("previous")), 400
+                if field["type"] == "number" and value != "":
                         try:
                             value = float(value)
                         except ValueError:
