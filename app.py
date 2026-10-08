@@ -14,6 +14,7 @@ from supplier_excel import export_suppliers, preview_import, signature
 from supplier_scoring import validate_scoring, score_suppliers
 from supplier_alerts import supplier_alerts
 from supplier_coverage import coverage_summary
+from supplier_history import supplier_history
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 CATEGORIES = [
@@ -1591,6 +1592,17 @@ def create_app(test_config=None):
             flash("Supplier added.","success")
             return redirect(url_for("panel_view",panel_id=panel_id))
         return render_template("supplier_form.html",panel=panel,supplier=None)
+
+    @app.route("/panels/<panel_id>/suppliers/<supplier_id>/history")
+    def supplier_history_view(panel_id, supplier_id):
+        panel=get_panel_or_404(panel_id)
+        supplier=find_supplier(panel,supplier_id)
+        if supplier is None:
+            from flask import abort
+            abort(404)
+        history=supplier_history(panel["data"]["panel"],supplier_id)
+        return render_template("supplier_history.html",panel=panel,supplier=supplier,
+                               history=history)
 
     @app.route("/panels/<panel_id>/suppliers/<supplier_id>/actions", methods=["GET", "POST"])
     def supplier_actions(panel_id, supplier_id):
