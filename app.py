@@ -94,7 +94,7 @@ def create_app(test_config=None):
         if not app.config.get("CSRF_ENABLED") or response.status_code != 200 or not response.mimetype == "text/html":
             return response
         markup=response.get_data(as_text=True)
-        pattern=r'(<form\\b(?=[^>]*\\bmethod\\s*=\\s*["\\\']post["\\\'])[^>]*>)'
+        pattern=r"(<form\b(?=[^>]*\bmethod\s*=\s*['\"]post['\"])[^>]*>)"
         if not re.search(pattern,markup,re.IGNORECASE):
             return response
         token=session.get("_csrf_token")
