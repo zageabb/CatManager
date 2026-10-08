@@ -1597,3 +1597,44 @@ def test_dev041_panel_coverage_renders_without_configured_regions(client):
     assert response.status_code==200
     assert b"Supplier coverage and sourcing concentration" in response.data
     assert b"No multi-select coverage field is configured." in response.data
+
+def test_dev042_full_panel_template_roundtrip_without_supplier_data(client):
+    create_panel(client,"CMP-TEMPLATE-SOURCE")
+    assert client.post("/panels/CMP-TEMPLATE-SOURCE/suppliers/new", data={
+        "supplier_id":"S1","supplier_name":"Original supplier","custom_rating":"4"
+    }).status_code==302
+    assert client.post("/panels/CMP-TEMPLATE-SOURCE/configuration",data={
+        "field_groups_json":"[]",
+        "fields_json":json.dumps([{"fieldId":"rating","fieldName":"Rating","type":"number","required":False,"options":[]}]),
+        "dashboard_widgets_json":json.dumps([{"title":"Average rating","metric":"average","fieldId":"rating","format":"number","display":"panel"}]),
+        "scoring_criteria_json":json.dumps([{"fieldId":"rating","weight":100}])
+    }).status_code==302
+    resp=client.post("/panels/CMP-TEMPLATE-SOURCE/save-template",data={"name":"Standard rating panel"})
+    assert resp.status_code==302
+    from app import get_db
+    with client.application.app_context():
+        templates=get_db().execute("SELECT template_id,config_json FROM panel_templates").fetchall()
+        assert len(templates)==1
+        tid=templates[0]["template_id"]
+        saved=json.loads(templates[0]["config_json"])
+        assert "suppliers" not in saved and "metadata" not in saved
+    page=client.get("/panel-templates")
+    assert b"Standard rating panel" in page.data
+    form=client.get("/panel-templates/"+tid+"/create")
+    assert form.status_code==200
+    created=client.post("/panel-templates/"+tid+"/create",data={
+        "panel_id":"CMP-TEMPLATE-NEW","panel_name":"New copy",
+        "category":"Transformers","business":"GI","region_level":"Country",
+        "region_value":"United Kingdom","owner":"New Owner",
+        "mdf_codes":["MDF-TR-001"],"lead_mdf_code":"MDF-TR-001",
+    })
+    assert created.status_code==302
+    original=client.get("/api/panels/CMP-TEMPLATE-SOURCE").get_json()["panel"]
+    duplicate=client.get("/api/panels/CMP-TEMPLATE-NEW").get_json()["panel"]
+    assert duplicate["supplierFields"]==original["supplierFields"]
+    assert duplicate["dashboardWidgets"]==original["dashboardWidgets"]
+    assert duplicate["scoringCriteria"]==original["scoringCriteria"]
+    assert duplicate["suppliers"]==[]
+    assert "Original supplier" not in client.get("/panels/CMP-TEMPLATE-NEW").get_data(as_text=True)
+    assert client.post("/panels/CMP-TEMPLATE-SOURCE/save-template",data={"name":""}).status_code==302
+    assert client.get("/panel-templates/not-a-template/create").status_code==404
