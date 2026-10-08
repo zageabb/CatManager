@@ -1365,6 +1365,18 @@ def create_app(test_config=None):
                                supplier_alert_rows=supplier_alerts(panel["data"]["panel"], get_dashboard_config()["qualificationReviewFieldId"]),
                                coverage=coverage_summary(panel["data"]["panel"], get_dashboard_config()["qualificationFieldId"]))
 
+    @app.route("/panels/<panel_id>/management-report")
+    def panel_management_print(panel_id):
+        panel=get_panel_or_404(panel_id)
+        core=panel["data"]["panel"]
+        config=get_dashboard_config()
+        return render_template("management_print.html",panel=panel,
+            generated_at=now_iso(),
+            scores=score_suppliers(core),
+            coverage=coverage_summary(core,config["qualificationFieldId"]),
+            alerts=supplier_alerts(core,config["qualificationReviewFieldId"]),
+            qualification_field=config["qualificationFieldId"])
+
     @app.route("/panels/<panel_id>/management-report.xlsx")
     def panel_management_report(panel_id):
         panel = get_panel_or_404(panel_id)
