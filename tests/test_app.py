@@ -88,7 +88,7 @@ def test_custom_field_groups_render_on_supplier_and_bulk_forms(client):
     })
     assert response.status_code==302
     body=client.get("/api/panels/CMP-GROUP").get_json()
-    assert body["schemaVersion"]==4
+    assert body["schemaVersion"]==5
     assert [g["name"] for g in body["panel"]["fieldGroups"]]==["Risk & Qualification","Performance"]
     assert body["panel"]["supplierFields"][0]["groupId"]=="risk_qualification"
     assert body["panel"]["supplierFields"][2]["groupId"]==""
@@ -138,7 +138,7 @@ def test_existing_schema3_panel_migrates_without_losing_supplier_values(app):
         "SECRET_KEY":"test",
     })
     migrated=migrated_app.test_client().get("/api/panels/CMP-OLD").get_json()
-    assert migrated["schemaVersion"]==4
+    assert migrated["schemaVersion"]==5
     assert migrated["panel"]["fieldGroups"]==[]
     assert migrated["panel"]["supplierFields"][0]["groupId"]==""
     assert migrated["panel"]["suppliers"][0]["customFields"]["rating"]==275.0
@@ -647,16 +647,16 @@ def test_panel_import_migrates_v1_and_export_returns_current_schema(client):
     )
     assert response.status_code==302
     body=client.get("/api/panels/CMP6000").get_json()
-    assert body["schemaVersion"]==4
+    assert body["schemaVersion"]==5
     assert body["panel"]["leadMdfCode"]=="MDF-TR-001"
     assert body["panel"]["mdfCodes"]==["MDF-TR-001"]
-    assert body["panel"]["metadata"]["version"]==4
+    assert body["panel"]["metadata"]["version"]==5
     exported=client.get("/panels/CMP6000/export")
     assert exported.status_code==200
     assert exported.mimetype=="application/json"
     assert 'attachment; filename="CMP6000.json"' in exported.headers["Content-Disposition"]
     exported_body=json.loads(exported.data)
-    assert exported_body["schemaVersion"]==4
+    assert exported_body["schemaVersion"]==5
 
 def test_panel_import_requires_replace_for_existing_panel(client):
     create_panel(client)
