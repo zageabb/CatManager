@@ -917,6 +917,12 @@ def test_duplicate_panel_preserves_configuration_but_not_suppliers_or_history(cl
     })
     source = client.get("/api/panels/CMP-SOURCE").get_json()["panel"]
     assert len(source["suppliers"]) == 1
+    client.post("/panels/CMP-SOURCE/configuration", data={
+        "field_groups_json": "[]",
+        "fields_json": json.dumps(source["supplierFields"]),
+        "dashboard_widgets_json": json.dumps([{"title": "Supplier Count", "metric": "count"}]),
+    })
+    source = client.get("/api/panels/CMP-SOURCE").get_json()["panel"]
     response = client.get("/panels/CMP-SOURCE/duplicate")
     assert response.status_code == 200
     assert b"Copy of Test Transformers" in response.data
@@ -934,6 +940,7 @@ def test_duplicate_panel_preserves_configuration_but_not_suppliers_or_history(cl
     assert duplicate["supplierFields"] == source["supplierFields"]
     assert duplicate["fieldGroups"] == source["fieldGroups"]
     assert duplicate["mdfCodes"] == source["mdfCodes"]
+    assert duplicate["dashboardWidgets"] == source["dashboardWidgets"]
     assert len(duplicate["metadata"]["auditTrail"]) == 1
     assert duplicate["metadata"]["auditTrail"][0]["action"] == "panel_duplicated"
     assert duplicate["metadata"]["auditTrail"][0]["details"]["sourcePanelId"] == "CMP-SOURCE"
@@ -1050,3 +1057,26 @@ def test_configurable_supplier_kpi_widgets_and_safe_zero_division(client):
         }]),
     })
     assert client.get("/panels/CMP-KPI").status_code == 200
+
+def test_currency_aware_kpi_sum_uses_base_currency_rates(client):
+    create_panel(client, "CMP-FX")
+    fields = [
+        {"fieldId":"annual_spend","fieldName":"Spend","type":"number"},
+        {"fieldId":"spend_currency","fieldName":"Currency","type":"dropdown",
+         "options":["GBP","EUR"]},
+    ]
+    client.post("/panels/CMP-FX/configuration", data={
+        "field_groups_json":"[]", "fields_json":json.dumps(fields),
+        "dashboard_widgets_json":json.dumps([
+            {"title":"Total spend","metric":"sum",
+             "fieldId":"annual_spend","format":"currency"}
+        ]),
+    })
+    for sid, currency in (("S1","GBP"),("S2","EUR")):
+        client.post("/panels/CMP-FX/suppliers/new", data={
+            "supplier_id":sid,"supplier_name":sid,
+            "custom_annual_spend":"100","custom_spend_currency":currency,
+        })
+    response=client.get("/panels/CMP-FX")
+    assert response.status_code==200
+    assert "£186.00" in response.get_data(as_text=True)
