@@ -87,7 +87,7 @@
       row.className="field-row custom";
       row.draggable=true;
       row.dataset.index=index;
-      const opts=["text","number","dropdown","date"].map(function(x){return '<option value="'+x+'" '+(f.type===x?"selected":"")+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>';}).join("");
+      const opts=["text","number","dropdown","date","boolean"].map(function(x){return '<option value="'+x+'" '+(f.type===x?"selected":"")+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>';}).join("");
       row.innerHTML=
         '<span class="drag" title="Drag to reorder">☰</span>'+
         '<input class="field-name" value="'+esc(f.fieldName||"")+'" placeholder="Field name">'+
