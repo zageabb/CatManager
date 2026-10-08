@@ -25,7 +25,7 @@ CATEGORIES = [
 ]
 BUSINESSES = ["GI", "GA", "GPQSS", "HVDC"]
 REGION_LEVELS = ["Global", "Region", "HUB", "Country"]
-FIELD_TYPES = ["number", "text", "dropdown", "date"]
+FIELD_TYPES = ["number", "text", "dropdown", "date", "boolean"]
 DEFAULT_MDF_CODES = [
     {"code": "3GF", "description": "Grid equipment"},
     {"code": "MDF-TR-001", "description": "Power Transformers"},
@@ -1206,6 +1206,8 @@ def create_app(test_config=None):
             custom = {}
             for field in data["panel"].get("supplierFields",[]):
                 value = request.form.get(f"custom_{field['fieldId']}","")
+                if field["type"] == "boolean":
+                    value = True if value == "true" else False if value == "false" else None
                 if field["type"] == "number" and value != "":
                     try: value = float(value)
                     except ValueError:
@@ -1267,6 +1269,8 @@ def create_app(test_config=None):
                 for field in fields:
                     key = f"{supplier_id}__{field['fieldId']}"
                     value = request.form.get(key, "")
+                    if field["type"] == "boolean":
+                        value = True if value == "true" else False if value == "false" else None
                     if field["type"] == "number" and value != "":
                         try:
                             value = float(value)
