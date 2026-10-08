@@ -181,3 +181,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [x] Allow creating a named reusable template from a panel's configuration (field groups, field definitions, KPI widgets and scoring criteria), listing templates, and creating new independent panels from a template without copying supplier records or audit history. Include input validation, snapshot semantics, regression tests and CI before main merge.
 
   - Evidence: SQLite-backed immutable snapshots of field groups, field definitions, dashboard widgets, and scoring criteria; template library and independent panel creation. Supplier data and prior audit history are excluded. Regression test and PR CI run 37835782381 passed on 3bd4847dc0e24e8efee436381db76d950c0921f4.
+
+### DEV-043 — Supplier change history and trends
+- [ ] Read-only supplier history from audit entries for supplier edits, bulk edits, Excel imports and action updates, with field-by-field before/after values, dates, actors and numeric rating history. Must handle old and missing audit records without fabricating trends; test and pass CI before main merge.
