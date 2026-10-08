@@ -86,3 +86,5 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 
 - [x] DEV-029 Star Rating custom type (0–5 in half-point steps), numeric editing/validation, accessible star display in supplier list, reusable templates, star-formatted KPI cards and supplier KPI columns, tests and CI before merge to main.
   - Evidence: `stars` type with half-step supplier numeric editing; validated 0–5 range on supplier create/edit/bulk edit; accessible stars in the supplier list and star-formatted dashboard/supplier KPI values; predefined quality rating field; regression test. PR CI run 37777729624 passed on f9baef933407fd69c68c1b7f943dfc197c025082.
+
+- [ ] DEV-030 Multi-Select Colour Blocks: one configurable options field (e.g. EU/MED/MEA/NAM/LAM/APAC), checklist supplier editing and bulk grid, one supplier-table cell with adjacent green/neutral labelled segments. Store selected option values as JSON arrays, reject unknown selections, preserve existing suppliers and shared field-template support. Regression tests + passing CI before main merge.
