@@ -1009,6 +1009,7 @@ def test_configurable_supplier_kpi_widgets_and_safe_zero_division(client):
     widgets = [
         {"title": "Suppliers", "metric": "count"},
         {"title": "MVA", "metric": "sum", "fieldId": "mva"},
+        {"title": "Total spend", "metric": "sum", "fieldId": "spend"},
         {"title": "Spend per MVA", "metric": "ratio",
          "fieldId": "spend", "otherFieldId": "mva"},
         {"title": "Average spend", "metric": "average", "fieldId": "spend"},
@@ -1032,7 +1033,7 @@ def test_configurable_supplier_kpi_widgets_and_safe_zero_division(client):
     assert b"4.67" in page.data  # sum(spend)/sum(mva)
     assert b"700.00" in page.data
     saved_widgets = client.get("/api/panels/CMP-KPI").get_json()["panel"]["dashboardWidgets"]
-    assert len(saved_widgets) == 4
+    assert len(saved_widgets) == 5
 
     # Bad definitions rejected, and prior configuration preserved.
     failure = client.post("/panels/CMP-KPI/configuration", data={
@@ -1040,7 +1041,7 @@ def test_configurable_supplier_kpi_widgets_and_safe_zero_division(client):
         "dashboard_widgets_json": json.dumps([{"title": f"W{i}", "metric": "count"} for i in range(7)]),
     })
     assert failure.status_code == 400
-    assert len(client.get("/api/panels/CMP-KPI").get_json()["panel"]["dashboardWidgets"]) == 4
+    assert len(client.get("/api/panels/CMP-KPI").get_json()["panel"]["dashboardWidgets"]) == 5
     client.post("/panels/CMP-KPI/configuration", data={
         "fields_json": json.dumps(fields), "field_groups_json": "[]",
         "dashboard_widgets_json": json.dumps([{
