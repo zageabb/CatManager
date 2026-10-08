@@ -214,3 +214,10 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 ### BUG-049 — KPI preview JSON failure after CSRF rollout
 - [x] Panel Configuration KPI live preview must supply session CSRF token on its JSON POST, return a clear error for non-JSON responses, and continue to work under enforced CSRF. Add an end-to-end regression and re-run CI before merge.
   - Fix: pass server-provided session CSRF token in X-CSRF-Token for JSON preview requests and detect non-JSON HTTP responses. Regression tests verified CSRF-enabled panel creation, rejected tokenless preview and successful token-authenticated JSON preview. PR CI 37851308714 passed at cb1eaca291e6fc283c4d8202f83b2ab7f00b0fcf.
+
+## Approved future UX redesign — supplier-first panel (documentation only)
+- [ ] **UX-051** Supplier workspace as default panel view; three primary actions and grouped overflow menu; tab sections for intelligence. Specification: [Supplier-first UX spec](docs/SUPPLIER_FIRST_PANEL_UX_SPEC.md).
+- [ ] **UX-052** Supplier-first table polish (compact KPI strip, search/filter/column settings, row menus, responsive wide fields).
+- [ ] **UX-053** Card-based Panel Configuration hub, with existing workflows preserved and focused sections introduced incrementally.
+- [ ] **UX-054** Accessibility, CSRF/security regression, layout smoke tests, screenshots and release notes.
+  - Implementation guide: [Supplier-first implementation plan](docs/SUPPLIER_FIRST_PANEL_IMPLEMENTATION.md). **These are approved plans, NOT completed development. Do not change live UI in this docs-only change.**
