@@ -139,3 +139,6 @@
 .multi-block-inactive{background:#e1e5ea;color:#596675;}
 .multi-block-options{display:flex;flex-wrap:wrap;gap:.45rem .75rem;}
 .multi-block-check{display:inline-flex!important;align-items:center;gap:.25rem;font-weight:500;white-space:nowrap;}
+
+/* The MDF picker uses row.hidden while typing. Override the forced flex display for hidden rows. */
+.mdf-option[hidden]{display:none!important;}
