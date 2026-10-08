@@ -183,4 +183,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
   - Evidence: SQLite-backed immutable snapshots of field groups, field definitions, dashboard widgets, and scoring criteria; template library and independent panel creation. Supplier data and prior audit history are excluded. Regression test and PR CI run 37835782381 passed on 3bd4847dc0e24e8efee436381db76d950c0921f4.
 
 ### DEV-043 — Supplier change history and trends
-- [ ] Read-only supplier history from audit entries for supplier edits, bulk edits, Excel imports and action updates, with field-by-field before/after values, dates, actors and numeric rating history. Must handle old and missing audit records without fabricating trends; test and pass CI before main merge.
+- [x] Read-only supplier history from audit entries for supplier edits, bulk edits, Excel imports and action updates, with field-by-field before/after values, dates, actors and numeric rating history. Must handle old and missing audit records without fabricating trends; test and pass CI before main merge.
+
+  - Evidence: supplier_history.py reconstructs exact per-field change records from direct edits, supplier action changes, Excel and bulk imports; shows audited numeric values without inventing historical states. Regression tests passed, PR CI 37839253145 on 8bf15bc370c35b622d9114caead9ea5c84758db7.
