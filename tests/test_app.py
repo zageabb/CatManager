@@ -970,3 +970,32 @@ def test_field_template_library_creates_independent_field_definitions(client):
         "field_groups_json": "[]", "fields_json": json.dumps(fields),
     })
     assert client.get("/api/field-templates").get_json()[0]["options"] == ["ONAN", "ONAF"]
+
+def test_boolean_field_tristate_in_supplier_and_bulk_editor(client):
+    create_panel(client, "CMP-BOOL")
+    client.post("/panels/CMP-BOOL/configuration", data={
+        "field_groups_json": "[]",
+        "fields_json": json.dumps([{
+            "fieldId": "approved", "fieldName": "Approved", "type": "boolean",
+            "required": False, "options": []
+        }])
+    })
+    form = client.get("/panels/CMP-BOOL/suppliers/new")
+    assert b'option value="true"' in form.data
+    client.post("/panels/CMP-BOOL/suppliers/new", data={
+        "supplier_id": "SUP-B", "supplier_name": "Test Boolean",
+        "custom_approved": "true"
+    })
+    body = client.get("/api/panels/CMP-BOOL").get_json()
+    assert body["panel"]["suppliers"][0]["customFields"]["approved"] is True
+    assert b"boolean-yes" in client.get("/panels/CMP-BOOL").data
+    client.post("/panels/CMP-BOOL/suppliers/bulk-edit", data={
+        "SUP-B__approved": "false"
+    })
+    assert client.get("/api/panels/CMP-BOOL").get_json()["panel"]["suppliers"][0]["customFields"]["approved"] is False
+    assert b"boolean-no" in client.get("/panels/CMP-BOOL").data
+    client.post("/panels/CMP-BOOL/suppliers/SUP-B/edit", data={
+        "supplier_name": "Test Boolean", "custom_approved": ""
+    })
+    assert client.get("/api/panels/CMP-BOOL").get_json()["panel"]["suppliers"][0]["customFields"]["approved"] is None
+    assert b"boolean-unset" in client.get("/panels/CMP-BOOL").data
