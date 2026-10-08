@@ -299,6 +299,83 @@ def create_app(test_config=None):
             clean.append({"fieldId":fid,"fieldName":name,"type":ftype,"options":[str(x).strip() for x in options if str(x).strip()],"required":bool(field.get("required",False)),"groupId":str(field.get("groupId") or "").strip(),"order":index+1})
         return clean
 
+    def parse_dashboard_widgets(raw, fields):
+        try:
+            widgets = json.loads(raw or "[]")
+        except json.JSONDecodeError as exc:
+            raise ValueError("Dashboard widgets must be valid JSON.") from exc
+        if not isinstance(widgets, list) or len(widgets) > 6:
+            raise ValueError("A panel supports up to six dashboard widgets.")
+        valid_fields = {"supplierId", "supplierName"} | {f["fieldId"] for f in fields}
+        valid_metrics = {"count", "count_where", "sum", "average", "minimum", "maximum",
+                         "distinct", "percentage", "ratio"}
+        clean = []
+        for widget in widgets:
+            if not isinstance(widget, dict):
+                raise ValueError("Invalid dashboard widget.")
+            title = str(widget.get("title", "")).strip()[:80]
+            metric = str(widget.get("metric", "")).strip()
+            field = str(widget.get("fieldId", "")).strip()
+            other = str(widget.get("otherFieldId", "")).strip()
+            if not title or metric not in valid_metrics:
+                raise ValueError("Each widget requires a title and valid calculation.")
+            if metric != "count" and field not in valid_fields:
+                raise ValueError("Widget refers to an unknown supplier field.")
+            if metric in ("ratio", "percentage") and other not in valid_fields:
+                raise ValueError("Widget denominator refers to an unknown field.")
+            clean.append({"widgetId": str(widget.get("widgetId") or uuid4().hex),
+                          "title": title, "metric": metric, "fieldId": field,
+                          "otherFieldId": other, "match": str(widget.get("match", ""))[:100],
+                          "format": widget.get("format") if widget.get("format") in ("number","currency","percentage") else "number"})
+        return clean
+
+    def calculate_dashboard_widgets(core):
+        suppliers = core.get("suppliers", [])
+        def values(field_id):
+            if field_id in ("supplierId", "supplierName"):
+                return [supplier.get(field_id) for supplier in suppliers]
+            return [supplier.get("customFields", {}).get(field_id) for supplier in suppliers]
+        def numbers(field_id):
+            out = []
+            for value in values(field_id):
+                if isinstance(value, bool) or value in (None, ""):
+                    continue
+                try:
+                    number = float(value)
+                    if number == number and abs(number) != float("inf"):
+                        out.append(number)
+                except (TypeError, ValueError, OverflowError):
+                    continue
+            return out
+        results = []
+        for widget in core.get("dashboardWidgets", [])[:6]:
+            metric = widget.get("metric")
+            fid = widget.get("fieldId", "")
+            nums = numbers(fid) if metric in ("sum","average","minimum","maximum","ratio","percentage") else []
+            value = None
+            if metric == "count":
+                value = len(suppliers)
+            elif metric == "count_where":
+                target = widget.get("match", "").strip().lower()
+                value = sum(str(v).lower() == target for v in values(fid) if v is not None)
+            elif metric == "distinct":
+                value = len({str(v) for v in values(fid) if v is not None and v != ""})
+            elif metric == "sum":
+                value = sum(nums)
+            elif metric == "average":
+                value = sum(nums)/len(nums) if nums else None
+            elif metric == "minimum":
+                value = min(nums) if nums else None
+            elif metric == "maximum":
+                value = max(nums) if nums else None
+            elif metric in ("ratio", "percentage"):
+                denominator = sum(numbers(widget.get("otherFieldId", "")))
+                if denominator:
+                    value = sum(nums)/denominator * (100 if metric == "percentage" else 1)
+            results.append({"title": widget.get("title", "Widget"), "value": value,
+                            "metric": metric, "format": widget.get("format", "number")})
+        return results
+
     def parse_field_groups(raw):
         try:
             groups = json.loads(raw or "[]")
@@ -908,6 +985,8 @@ def create_app(test_config=None):
                 return render_template("panel_form.html",panel=existing),400
 
         payload = build_panel_payload(panel_id,panel_name,category,business,region_level,value,owner,mdf_codes,lead_mdf_code,field_groups,fields,suppliers,created_at,existing_metadata)
+        if existing and "dashboardWidgets" in existing["data"]["panel"]:
+            payload["panel"]["dashboardWidgets"] = json.loads(json.dumps(existing["data"]["panel"]["dashboardWidgets"]))
         if source:
             # A duplicate is a fresh aggregate: no supplier records, history or orphaned values.
             # Carry over optional panel configuration such as future KPI widget definitions.
@@ -953,6 +1032,7 @@ def create_app(test_config=None):
             field_groups = parse_field_groups(request.form.get("field_groups_json","[]"))
             fields = parse_fields(request.form.get("fields_json","[]"))
             group_ids = {g["groupId"] for g in field_groups}
+            widgets = parse_dashboard_widgets(request.form.get("dashboard_widgets_json", json.dumps(core.get("dashboardWidgets", []))), fields)
             unknown_groups = sorted({f["groupId"] for f in fields if f.get("groupId") and f["groupId"] not in group_ids})
             if unknown_groups:
                 raise ValueError("Custom fields reference unknown field groups: " + ", ".join(unknown_groups))
@@ -1010,6 +1090,7 @@ def create_app(test_config=None):
         before = json.loads(json.dumps(panel["data"]))
         core["fieldGroups"] = field_groups
         core["supplierFields"] = fields
+        core["dashboardWidgets"] = widgets
         changes = panel_change_summary(before, data)
         if changes:
             append_audit(data, "panel_configuration_updated", panel["panel_id"], {"changes": changes})
@@ -1066,6 +1147,10 @@ def create_app(test_config=None):
                     "before": before_core.get(key),
                     "after": after_core.get(key),
                 }
+        if before_core.get("dashboardWidgets", []) != after_core.get("dashboardWidgets", []):
+            changes["dashboardWidgets"] = {"label": "Dashboard widgets",
+                                            "before": before_core.get("dashboardWidgets", []),
+                                            "after": after_core.get("dashboardWidgets", [])}
         if before_core.get("fieldGroups", []) != after_core.get("fieldGroups", []):
             changes["fieldGroups"] = {
                 "label": "Field groups",
@@ -1102,7 +1187,9 @@ def create_app(test_config=None):
 
     @app.route("/panels/<panel_id>")
     def panel_view(panel_id):
-        return render_template("panel_view.html",panel=get_panel_or_404(panel_id))
+        panel = get_panel_or_404(panel_id)
+        return render_template("panel_view.html", panel=panel,
+                               dashboard_widgets=calculate_dashboard_widgets(panel["data"]["panel"]))
 
     @app.route("/panels/<panel_id>/fields/orphans")
     def orphan_fields(panel_id):
