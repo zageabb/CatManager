@@ -1387,3 +1387,27 @@ def test_supplier_excel_rejects_schema_mismatch_and_invalid_rating(client):
     },content_type="multipart/form-data",follow_redirects=True)
     assert b"Column headers" in response.data
     assert client.get("/api/panels/CMP-EXCEL-ERR").get_json()["panel"]["suppliers"][0]["customFields"]["rating"]==2.0
+
+def test_dev035_live_kpi_preview_without_saving(client):
+    create_panel(client, "CMP-PREVIEW")
+    assert client.post("/panels/CMP-PREVIEW/suppliers/new",data={
+        "supplier_id":"S-1","supplier_name":"One","custom_rating":"4"
+    }).status_code==302
+    assert client.post("/panels/CMP-PREVIEW/suppliers/new",data={
+        "supplier_id":"S-2","supplier_name":"Two","custom_rating":"2"
+    }).status_code==302
+    widget={"title":"Average rating","metric":"average","fieldId":"rating",
+            "format":"number","display":"panel"}
+    preview=client.post("/panels/CMP-PREVIEW/widgets/preview",json={"widgets":[widget]})
+    assert preview.status_code==200
+    assert preview.get_json()["widgets"][0]["value"]==3.0
+    panel=client.get("/api/panels/CMP-PREVIEW").get_json()["panel"]
+    assert panel.get("dashboardWidgets",[])==[]
+    invalid=client.post("/panels/CMP-PREVIEW/widgets/preview",json={
+        "widgets":[dict(widget,fieldId="missing")]
+    })
+    assert invalid.status_code==400
+    assert "unknown supplier field" in invalid.get_json()["error"]
+    page=client.get("/panels/CMP-PREVIEW/configuration")
+    assert b'data-preview-url=' in page.data
+    assert b"current supplier data" in page.data

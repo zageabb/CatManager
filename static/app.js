@@ -155,6 +155,46 @@
       return '<option value="'+esc(f.fieldId)+'" '+(f.fieldId===current?"selected":"")+'>'+esc(f.fieldName)+' ('+esc(f.type||"text")+')</option>';
     }).join("");
   }
+  let previewRequest=0;
+  function scheduleWidgetPreview(){
+    if(!widgetRoot)return;
+    const requestId=++previewRequest;
+    const valid=widgets.every(w=>w.title && (w.metric==="count" || w.fieldId) &&
+      (!["ratio","percentage"].includes(w.metric) || w.otherFieldId));
+    widgetRoot.querySelectorAll(".widget-preview").forEach(el=>{
+      el.textContent=valid?"Calculating from current supplier data…":"Choose all required fields to preview";
+    });
+    if(!valid)return;
+    fetch(widgetRoot.dataset.previewUrl,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({widgets:widgets})
+    }).then(async response=>{
+      const data=await response.json();
+      if(requestId!==previewRequest)return;
+      if(!response.ok)throw new Error(data.error||"Unable to preview");
+      const displayed=data.widgets||[];
+      widgets.forEach((w,i)=>{
+        const el=widgetRoot.querySelectorAll(".widget-preview")[i];
+        if(!el)return;
+        const match=displayed.find(p=>p.title===w.title);
+        if(!match){el.textContent=w.display==="supplier"?"Supplier-level only — preview in supplier table":"No panel preview";return;}
+        if(match.value===null){el.textContent="No available data yet";return;}
+        const value=Number(match.value);
+        let shown=Number.isFinite(value)?value.toLocaleString(undefined,{maximumFractionDigits:2}):"—";
+        if(w.format==="percentage"||w.metric==="percentage")shown+="%";
+        if(w.format==="currency")shown=(match.currencyPrefix||"")+shown;
+        if(["stars","stars_both"].includes(w.format)){
+          const rating=Math.max(0,Math.min(5,value));
+          shown="★".repeat(Math.floor(rating))+"☆".repeat(5-Math.floor(rating))+
+            (w.format==="stars_both"?" "+shown+"/5":"");
+        }
+        el.textContent=shown+" · "+(match.excluded||0)+" excluded";
+      });
+    }).catch(err=>{
+      if(requestId!==previewRequest)return;
+      widgetRoot.querySelectorAll(".widget-preview").forEach(el=>el.textContent=err.message);
+    });
+  }
   function renderWidgets(){
     if(!widgetRoot)return;
     widgetRoot.innerHTML="";
@@ -168,13 +208,13 @@
         '<input class="widget-match" aria-label="Count matching value" placeholder="Equals..." value="'+esc(w.match||"")+'">'+
         '<select class="widget-format" aria-label="Output format">'+["number","currency","percentage","stars","stars_both"].map(function(f){return '<option value="'+f+'" '+(w.format===f?"selected":"")+'>'+({stars:"Stars",stars_both:"Stars and number",number:"Number",currency:"Currency",percentage:"Percentage"}[f])+'</option>';}).join("")+'</select>'+
         '<select class="widget-display" aria-label="Display location">'+["panel","supplier","both"].map(function(d){return '<option value="'+d+'" '+((w.display||"panel")===d?"selected":"")+'>'+({panel:"Panel KPI",supplier:"Supplier column",both:"Both"}[d])+'</option>';}).join("")+'</select>'+
-        '<button class="btn compact danger widget-remove" type="button">Remove</button>';
+        '<button class="btn compact danger widget-remove" type="button">Remove</button>'+        '<div class="widget-preview" role="status" aria-live="polite">Calculating preview…</div>';
       [[".widget-title","title"],[".widget-metric","metric"],[".widget-field","fieldId"],
        [".widget-other","otherFieldId"],[".widget-match","match"],[".widget-format","format"],[".widget-display","display"]].forEach(function(item){
         row.querySelector(item[0]).addEventListener("change",function(e){w[item[1]]=e.target.value;if(item[1]==="format" && ["stars","stars_both"].includes(w.format)){if(!["stars","number"].includes((availableWidgetFields.find(f=>f.fieldId===w.fieldId)||{}).type))w.fieldId="";if(!["average","minimum","maximum"].includes(w.metric))w.metric="average";}syncWidgets();renderWidgets();});
       });
-      row.querySelector(".widget-title").addEventListener("input",function(e){w.title=e.target.value;syncWidgets();});
-      row.querySelector(".widget-match").addEventListener("input",function(e){w.match=e.target.value;syncWidgets();});
+      row.querySelector(".widget-title").addEventListener("input",function(e){w.title=e.target.value;syncWidgets();scheduleWidgetPreview();});
+      row.querySelector(".widget-match").addEventListener("input",function(e){w.match=e.target.value;syncWidgets();scheduleWidgetPreview();});
       row.querySelector(".widget-metric").querySelectorAll("option").forEach(function(opt){opt.disabled=["stars","stars_both"].includes(w.format)&&!["average","minimum","maximum"].includes(opt.value);});
       row.querySelector(".widget-other").hidden=!["ratio","percentage"].includes(w.metric);
       row.querySelector(".widget-match").hidden=w.metric!=="count_where";
@@ -183,6 +223,7 @@
       widgetRoot.appendChild(row);
     });
     if(addWidget)addWidget.disabled=widgets.length>=6;
+    scheduleWidgetPreview();
   }
   function syncWidgets(){if(widgetHidden)widgetHidden.value=JSON.stringify(widgets);}
   if(addWidget)addWidget.addEventListener("click",function(){
