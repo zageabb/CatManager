@@ -137,6 +137,17 @@ def create_app(test_config=None):
                    ON CONFLICT(code) DO UPDATE SET description=excluded.description, updated_at=excluded.updated_at""",
                 (m["code"], m["description"], 1, ts, ts),
             )
+        # Reusable starting library; never overwrite user-customized templates.
+        for tid, name, kind, options in (
+            ("standard_mva", "Rated Power (MVA)", "number", []),
+            ("standard_voltage", "Rated Voltage (kV)", "number", []),
+            ("standard_cooling", "Cooling Type", "dropdown", ["ONAN", "ONAF", "OFAF", "ODAF"]),
+            ("standard_approved", "Approved", "boolean", []),
+        ):
+            db.execute(
+                "INSERT OR IGNORE INTO field_templates(template_id,field_name,field_type,options_json,required,updated_at) VALUES(?,?,?,?,?,?)",
+                (tid, name, kind, json.dumps(options), 0, ts),
+            )
         db.commit()
         rows = db.execute("SELECT id,mdf_code,data_json FROM panels").fetchall()
         for row in rows:
