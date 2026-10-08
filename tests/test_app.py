@@ -1571,3 +1571,29 @@ def test_dev040_panel_renders_qualification_alerts(client):
     assert b"Qualification review alerts" in response.data
     assert b"No qualification reviews or actions require attention." in response.data
     assert b"Review status" in response.data
+
+def test_dev041_coverage_concentration_and_qualification():
+    from supplier_coverage import coverage_summary
+    core={"mdfCodes":["MDF-TR-001"],"leadMdfCode":"MDF-TR-001",
+          "supplierFields":[{"fieldId":"regions","fieldName":"Regional coverage",
+                             "type":"multiselect_blocks","options":["EU","MEA","APAC"]}],
+          "suppliers":[
+            {"supplierId":"A","customFields":{"regions":["EU","MEA"],"qualification_status":"Qualified"}},
+            {"supplierId":"B","customFields":{"regions":["EU"],"qualification_status":"In review"}},
+            {"supplierId":"C","customFields":{"regions":"APAC","qualification_status":"Qualified"}},
+          ]}
+    result=coverage_summary(core)
+    regions={r["region"]:r for r in result["groups"][0]["regions"]}
+    assert (regions["EU"]["count"],regions["EU"]["qualifiedCount"],regions["EU"]["risk"])==(2,1,"Multiple sources")
+    assert (regions["MEA"]["count"],regions["MEA"]["qualifiedCount"],regions["MEA"]["risk"])==(1,1,"Single source")
+    assert regions["APAC"]["risk"]=="Uncovered"
+    assert result["mdfCodes"]==["MDF-TR-001"]
+    assert all("supplierMdf" not in row for row in regions.values())
+
+
+def test_dev041_panel_coverage_renders_without_configured_regions(client):
+    create_panel(client,"CMP-COVERAGE")
+    response=client.get("/panels/CMP-COVERAGE")
+    assert response.status_code==200
+    assert b"Supplier coverage and sourcing concentration" in response.data
+    assert b"No multi-select coverage field is configured." in response.data
