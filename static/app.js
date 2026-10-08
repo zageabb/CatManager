@@ -11,6 +11,33 @@
   function parseValue(el){if(!el)return [];try{return JSON.parse(el.value||"[]");}catch(e){return [];}}
   let fields=parseValue(hidden);
   let groups=parseValue(groupHidden);
+  const templateSelector=document.querySelector("#template-selector");
+  const addTemplateField=document.querySelector("#add-template-field");
+  let fieldTemplates=[];
+  function nextFieldId(name){
+    const base=slug(name);let id=base,n=2;
+    const ids=new Set(fields.map(function(f){return f.fieldId;}));
+    while(ids.has(id)){id=base+"_"+n;n+=1;}
+    return id;
+  }
+  async function loadFieldTemplates(){
+    if(!templateSelector)return;
+    try{
+      const response=await fetch("/api/field-templates");
+      if(!response.ok)throw new Error("Unable to load templates");
+      fieldTemplates=await response.json();
+      templateSelector.innerHTML='<option value="">Select predefined field…</option>'+
+        fieldTemplates.map(function(t){return '<option value="'+esc(t.templateId)+'">'+esc(t.fieldName)+' ('+esc(t.type)+')</option>';}).join("");
+    }catch(e){templateSelector.innerHTML='<option value="">Field library unavailable</option>';}
+  }
+  if(addTemplateField)addTemplateField.addEventListener("click",function(){
+    const t=fieldTemplates.find(function(x){return x.templateId===templateSelector.value;});
+    if(!t)return;
+    fields.push({fieldId:nextFieldId(t.fieldName),fieldName:t.fieldName,type:t.type,
+      options:(t.options||[]).slice(),required:!!t.required,groupId:""});
+    renderFields();sync();
+  });
+  loadFieldTemplates();
 
   function sync(){
     if(hidden)hidden.value=JSON.stringify(fields.map(function(f,i){f.order=i+1;return f;}));
@@ -68,6 +95,7 @@
         '<select class="field-group" aria-label="Field group">'+groupOptions(f.groupId||"")+'</select>'+
         '<input class="field-options '+(f.type==="dropdown"?"":"hidden")+'" value="'+esc((f.options||[]).join(", "))+'" placeholder="Dropdown options, comma separated">'+
         '<label class="required-toggle"><input type="checkbox" '+(f.required?"checked":"")+'> Required</label>'+
+        '<button type="button" class="btn compact save-template" title="Add to predefined library">Save to library</button>'+
         '<button type="button" class="icon-delete" aria-label="Delete">×</button>';
       row.querySelector(".field-name").addEventListener("input",function(e){
         fields[index].fieldName=e.target.value;
@@ -82,6 +110,19 @@
       row.querySelector(".field-group").addEventListener("change",function(e){fields[index].groupId=e.target.value;sync();});
       row.querySelector(".field-options").addEventListener("input",function(e){fields[index].options=e.target.value.split(",").map(function(x){return x.trim();}).filter(Boolean);sync();});
       row.querySelector(".required-toggle input").addEventListener("change",function(e){fields[index].required=e.target.checked;sync();});
+      row.querySelector(".save-template").addEventListener("click",async function(){
+        const button=this;
+        button.disabled=true;
+        try {
+          const response=await fetch("/api/field-templates",{
+            method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify(fields[index])
+          });
+          if(!response.ok){const error=await response.json();throw new Error(error.error||"Save failed");}
+          await loadFieldTemplates();
+          button.textContent="Saved";
+        }catch(error){button.textContent=error.message||"Save failed";button.disabled=false;}
+      });
       row.querySelector(".icon-delete").addEventListener("click",function(){fields.splice(index,1);renderFields();sync();});
       row.addEventListener("dragstart",function(e){e.dataTransfer.setData("text/plain",String(index));});
       row.addEventListener("dragover",function(e){e.preventDefault();});
