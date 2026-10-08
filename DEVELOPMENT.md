@@ -152,3 +152,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 ### DEV-035 — Guided KPI designer with live preview
 - [x] Introduce clearer KPI configuration (title, calculation, source, matching value/denominator, format, location) and a live read-only server-calculated preview using the panel's supplier records and existing KPI calculation functions. Preview must not save configuration; invalid drafts should show helpful validation. Add regression tests and merge after CI.
   - Evidence: guided configuration instructions, preview endpoint using the shared dashboard widget parser and calculator, current supplier data, live updates and non-persisting preview. Tests verified average calculation, rejected invalid field, and no panel mutation. CI run 37821349198 passed on b5d0b43889a5cfa695633fb65bea2ddd8d8170d3.
+
+### DEV-036 — Supplier comparison
+- [ ] Read-only comparison of 2–5 suppliers within one panel, showing fixed attributes, configured custom field values, ratings, multi-region coverage, and calculated supplier KPIs. Selection via supplier-table checkboxes; validate duplicate/unknown IDs and preserve panel data. Add regression tests and CI before main merge.
