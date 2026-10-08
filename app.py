@@ -123,6 +123,13 @@ def create_app(test_config=None):
             required INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS panel_templates (
+            template_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            config_json TEXT NOT NULL,
+            source_panel_id TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS app_settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL,
@@ -1026,6 +1033,45 @@ def create_app(test_config=None):
                         "type": field["type"], "options": field["options"],
                         "required": field["required"]}), 201
 
+    def get_panel_template(template_id):
+        row = get_db().execute("SELECT * FROM panel_templates WHERE template_id=?", (template_id,)).fetchone()
+        if row is None:
+            from flask import abort
+            abort(404)
+        return row
+
+    @app.route("/panel-templates")
+    def panel_template_list():
+        templates = get_db().execute("SELECT * FROM panel_templates ORDER BY created_at DESC").fetchall()
+        return render_template("panel_templates.html", templates=templates)
+
+    @app.route("/panels/<panel_id>/save-template", methods=["POST"])
+    def panel_save_template(panel_id):
+        panel = get_panel_or_404(panel_id)
+        name = request.form.get("name","").strip()
+        if not name or len(name)>100:
+            flash("Template name must be 1–100 characters.", "error")
+            return redirect(url_for("panel_view",panel_id=panel_id))
+        core=panel["data"]["panel"]
+        snapshot={k:json.loads(json.dumps(core.get(k,[]))) for k in
+                  ("fieldGroups","supplierFields","dashboardWidgets","scoringCriteria")}
+        get_db().execute("INSERT INTO panel_templates(template_id,name,config_json,source_panel_id,created_at) VALUES(?,?,?,?,?)",
+                         (str(uuid4()),name,json.dumps(snapshot),panel_id,now_iso()))
+        get_db().commit()
+        flash("Panel template saved.", "success")
+        return redirect(url_for("panel_template_list"))
+
+    @app.route("/panel-templates/<template_id>/create", methods=["GET","POST"])
+    def panel_from_template(template_id):
+        row=get_panel_template(template_id)
+        snapshot=json.loads(row["config_json"])
+        # Preserve the existing panel creation validation and master-data checks.
+        virtual={"panel_id":"", "panel_name":"", "data":{"panel":snapshot}}
+        if request.method=="POST":
+            return save_panel(source=virtual)
+        return render_template("panel_form.html",panel=None,prefill=virtual,duplicate_source=virtual,
+                               selected_template=row)
+
     @app.route("/panels/new", methods=["GET","POST"])
     def panel_new():
         if request.method == "POST":
@@ -1102,13 +1148,15 @@ def create_app(test_config=None):
                 return render_template("panel_form.html",panel=existing),400
 
         payload = build_panel_payload(panel_id,panel_name,category,business,region_level,value,owner,mdf_codes,lead_mdf_code,field_groups,fields,suppliers,created_at,existing_metadata)
-        if existing and "dashboardWidgets" in existing["data"]["panel"]:
-            payload["panel"]["dashboardWidgets"] = json.loads(json.dumps(existing["data"]["panel"]["dashboardWidgets"]))
+        if existing:
+            for config_key in ("dashboardWidgets","scoringCriteria"):
+                if config_key in existing["data"]["panel"]:
+                    payload["panel"][config_key] = json.loads(json.dumps(existing["data"]["panel"][config_key]))
         if source:
             # A duplicate is a fresh aggregate: no supplier records, history or orphaned values.
             # Carry over optional panel configuration such as future KPI widget definitions.
             source_core = source["data"]["panel"]
-            for key in ("dashboardWidgets",):
+            for key in ("dashboardWidgets","scoringCriteria"):
                 if key in source_core:
                     payload["panel"][key] = json.loads(json.dumps(source_core[key]))
             payload["panel"]["suppliers"] = []
