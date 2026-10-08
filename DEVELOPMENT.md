@@ -171,3 +171,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [x] Surface existing qualification review dates as actionable per-supplier alerts (overdue, due within 30 days, later, missing or invalid), with links to edit supplier, plus overdue/open action due dates. Respect configured dashboard review field and preserve read-only data. Add tests and pass CI before merge.
 
   - Evidence: read-only supplier review and action alerts, due/overdue thresholds, missing/invalid categorisation, and direct edit/action links. Regression tests passed, PR CI 37834736853 on ee85ef0cba7176778080628243eb3d1982683286.
+
+### DEV-041 — Supplier coverage and sourcing concentration
+- [ ] Add read-only coverage summary from configured multi-select regional fields, distinguish coverage records from qualified supplier counts, flag uncovered regions and single-source regions, and show panel MDF scope without inventing supplier-to-MDF mappings. Regression tests and passing CI before merge.
