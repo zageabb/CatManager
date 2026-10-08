@@ -115,3 +115,14 @@
 .boolean-yes { background:#d5f5e4; color:#145b37; border:1px solid #7bc9a0; }
 .boolean-no { background:#ffe2e2; color:#8a2424; border:1px solid #e8a2a2; }
 .boolean-unset { background:#e8edf2; color:#3f5164; border:1px solid #b8c3ce; }
+
+/* DEV-027 configurable supplier KPI cards */
+.kpi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin:1rem 0;}
+.kpi-card{background:#fff;border:1px solid #e2e7ec;border-radius:.7rem;padding:1rem;display:flex;flex-direction:column;gap:.3rem;min-width:0;box-shadow:0 2px 9px rgba(15,31,50,.04);}
+.kpi-label{font-size:.85rem;color:#546174;font-weight:600;overflow-wrap:anywhere;}
+.kpi-value{font-size:1.55rem;color:#19283a;font-weight:700;overflow-wrap:anywhere;}
+.kpi-card small{font-size:.75rem;color:#6b7583;}
+.widget-row{display:flex;flex-wrap:wrap;gap:.5rem;margin:.5rem 0;}
+.widget-row input,.widget-row select{min-width:8rem;flex:1 1 8rem;}
+@media(max-width:720px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:450px){.kpi-grid{grid-template-columns:1fr;}}
