@@ -24,7 +24,8 @@
   <input type="hidden" id="field-groups-json" name="field_groups_json" value="{{ core.get('fieldGroups', [])|tojson|forceescape }}">
   <input type="hidden" id="fields-json" name="fields_json" value="{{ core.get('supplierFields', [])|tojson|forceescape }}">
   <div class="section-heading"><div><h2>Dashboard Widgets</h2><p>Display up to six supplier KPIs above the supplier table. Choose a source custom field, calculation (Average / Minimum / Maximum for ratings), and output as stars, number or both. Ratio still uses Sum(Field) ÷ Sum(Other field).</p></div><button class="btn" type="button" id="add-widget">+ Add KPI</button></div>
-  <div id="dashboard-widgets" data-fields='{{ core.get("supplierFields", [])|tojson|forceescape }}'></div>
+  <p class="help-text">Step 1: Name the KPI. Step 2: Choose calculation and source field. Step 3: Set its output format and display location. The preview uses current supplier data without saving.</p>
+  <div id="dashboard-widgets" data-preview-url="{{ url_for('dashboard_widget_preview', panel_id=panel.panel_id) }}" data-fields='{{ core.get("supplierFields", [])|tojson|forceescape }}'></div>
   <input type="hidden" id="dashboard-widgets-json" name="dashboard_widgets_json" value="{{ core.get('dashboardWidgets', [])|tojson|forceescape }}">
   <div class="form-actions"><a class="btn" href="{{ url_for('panel_view', panel_id=panel.panel_id) }}">Cancel</a><button class="btn primary" type="submit">Save Configuration</button></div>
 </form>
