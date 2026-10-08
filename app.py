@@ -1,3 +1,4 @@
+from data_quality import collect_quality
 import csv
 import io
 import json
@@ -1420,6 +1421,13 @@ def create_app(test_config=None):
             from flask import abort
             abort(404)
         return render_template("supplier_profile.html",supplier_id=supplier_id,matches=matches)
+
+    @app.route("/data-quality")
+    def data_quality_dashboard():
+        panels=[row_to_panel(r) for r in get_db().execute("SELECT * FROM panels ORDER BY panel_name").fetchall()]
+        records=collect_quality(panels)
+        return render_template("data_quality.html",records=records,
+            total_findings=sum(len(record["findings"]) for record in records))
 
     @app.route("/panels/<panel_id>/suppliers/compare")
     def supplier_compare(panel_id):
