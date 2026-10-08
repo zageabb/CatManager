@@ -1307,3 +1307,28 @@ def test_dev033_column_order_keeps_original_filter_and_sort_indices():
     assert 'localStorage.setItem(storageKey' in js
     assert 'columnOrder=[0,1,...order.filter(i=>!fixed.has(i)),headings.length-1]' in js
     assert '[data-supplier-table] th[hidden],[data-supplier-table] td[hidden]{display:none!important;}' in css
+
+def test_dev037_unsaved_guard_on_editing_forms(client):
+    create_panel(client,"CMP-UNSAVED")
+    urls=[
+        "/panels/new",
+        "/panels/CMP-UNSAVED/edit",
+        "/panels/CMP-UNSAVED/configuration",
+        "/panels/CMP-UNSAVED/suppliers/new",
+        "/panels/CMP-UNSAVED/suppliers/bulk-edit",
+    ]
+    for url in urls:
+        response=client.get(url)
+        assert response.status_code==200
+        assert "data-unsaved-guard" in response.get_data(as_text=True)
+
+
+def test_dev037_dirty_navigation_guard_js_contract():
+    from pathlib import Path
+    js=(Path(__file__).resolve().parents[1]/"static"/"app.js").read_text()
+    assert 'form.addEventListener("input",markDirty)' in js
+    assert 'form.addEventListener("change",markDirty)' in js
+    assert 'window.addEventListener("beforeunload"' in js
+    assert 'if(dirty&&!submitting)' in js
+    assert 'form.addEventListener("submit",()=>{submitting=true;})' in js
+    assert 'Leave without saving?' in js

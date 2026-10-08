@@ -140,3 +140,7 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 ### Current implementation: DEV-033 (supplier column views)
 - [x] DEV-033: On the supplier table, configure visible columns, reorder nonessential columns with up/down controls, keep Supplier ID/Name and Actions fixed, and save view preferences per panel in browser storage. Maintain DEV-032 search/sort correctness when columns move or are hidden; tests and CI before main merge.
   - Evidence: browser-local per-panel saved column visibility and order, fixed Supplier ID/Name/Actions, optional column movement, reset to default, original cell-index lookup retains DEV-032 filtering/sorting semantics. Regression tests passed, CI run 37813713324 on fb8c8bd4c2bd9baf4ace463500f8423235103efa.
+
+### DEV-037 — Unsaved changes protection
+- [x] Add dirty-form navigation warnings on panel metadata/configuration, supplier edit/new, and bulk edit. Track user input/change (including dynamic widgets), avoid warning on successful form submission or unchanged forms, and use native beforeunload to cover reload/browser navigation. Regression tests and CI required.
+  - Evidence: editing forms marked with data-unsaved-guard; browser beforeunload and navigation confirmations react to user edits, including dynamic editors; normal save submissions bypass warning. Regression tests, PR CI run 37814176992 passed on 561c48e4e6b5544733f8d2742f798378d0e5a708.
