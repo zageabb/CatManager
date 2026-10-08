@@ -1719,3 +1719,13 @@ def test_dev044_report_includes_qualified_coverage_and_open_actions():
     assert book["Regional coverage"]["E3"].value=="Uncovered"
     assert book["Supplier actions"]["C2"].value=="Obtain certification"
     assert book["Supplier actions"]["C3"].value is None
+
+def test_dev044_printable_management_summary(client):
+    create_panel(client,"CMP-PRINT")
+    response=client.get("/panels/CMP-PRINT/management-report")
+    assert response.status_code==200
+    assert b"Supplier Management Summary" in response.data
+    assert b"Print / Save as PDF" in response.data
+    assert b"Regional sourcing coverage" in response.data
+    assert b"Outstanding supplier actions" in response.data
+    assert b"Print Management Report" in client.get("/panels/CMP-PRINT").data
