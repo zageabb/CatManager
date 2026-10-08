@@ -176,3 +176,8 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [x] Add read-only coverage summary from configured multi-select regional fields, distinguish coverage records from qualified supplier counts, flag uncovered regions and single-source regions, and show panel MDF scope without inventing supplier-to-MDF mappings. Regression tests and passing CI before merge.
 
   - Evidence: derived multi-select region coverage, qualification counts, empty/single/multi supplier concentration, explicit panel-only MDF interpretation and display. Regression tests passed in CI 37835126854 at d95de44d703fcad793ee85172c438833ea898c2c.
+
+### DEV-042 — Governed reusable panel templates
+- [x] Allow creating a named reusable template from a panel's configuration (field groups, field definitions, KPI widgets and scoring criteria), listing templates, and creating new independent panels from a template without copying supplier records or audit history. Include input validation, snapshot semantics, regression tests and CI before main merge.
+
+  - Evidence: SQLite-backed immutable snapshots of field groups, field definitions, dashboard widgets, and scoring criteria; template library and independent panel creation. Supplier data and prior audit history are excluded. Regression test and PR CI run 37835782381 passed on 3bd4847dc0e24e8efee436381db76d950c0921f4.
