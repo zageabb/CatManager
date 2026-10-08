@@ -210,3 +210,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [x] Introduce explicitly opt-in CSRF enforcement with signed session tokens and legacy-compatible HTML form injection, production secret validation, secure cookie defaults and numbered SQLite migration ledger. Preserve test compatibility; add security and migration regression tests, pass CI. Full multi-user authentication/authorization remains separately scoped; do not claim it is delivered.
 
   - Evidence: `CATMANAGER_CSRF_ENABLED=1` turns on server-side form token checks with token injection for rendered POST forms; `CATMANAGER_REQUIRE_STRONG_SECRET=1` rejects the default secret; idempotent `schema_migrations` baseline registry added. Session cookie HttpOnly/SameSite defaults. Tests passed in PR CI 37849637149 on 30e4687107db4b7ded853682e1e5c73a4b9db350. NOTE: protection is opt-in for compatibility; this is not a multi-user authentication or role-based access control system. Subsequent numbered migrations and authentication remain pending security tasks.
+
+### BUG-049 — KPI preview JSON failure after CSRF rollout
+- [ ] Panel Configuration KPI live preview must supply session CSRF token on its JSON POST, return a clear error for non-JSON responses, and continue to work under enforced CSRF. Add an end-to-end regression and re-run CI before merge.
