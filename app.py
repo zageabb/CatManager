@@ -187,7 +187,7 @@ def create_app(test_config=None):
         metadata = json.loads(json.dumps(metadata or {}))
         metadata.setdefault("createdAt", created_at or now_iso())
         metadata["updatedAt"] = now_iso()
-        metadata["version"] = max(int(metadata.get("version", 1)), 4)
+        metadata["version"] = max(int(metadata.get("version", 1)), 5)
         metadata.setdefault("auditTrail", [])
         return {
             "schemaVersion": 5,
