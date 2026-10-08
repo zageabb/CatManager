@@ -140,6 +140,56 @@
   });
   renderGroups();renderFields();sync();
 
+
+  const widgetRoot=document.querySelector("#dashboard-widgets");
+  const widgetHidden=document.querySelector("#dashboard-widgets-json");
+  const addWidget=document.querySelector("#add-widget");
+  let widgets=parseValue(widgetHidden);
+  const widgetMetrics=["count","count_where","sum","average","minimum","maximum","distinct","ratio","percentage"];
+  const availableWidgetFields=[{fieldId:"supplierId",fieldName:"Supplier ID"},
+    {fieldId:"supplierName",fieldName:"Supplier Name"}]
+    .concat(widgetRoot ? JSON.parse(widgetRoot.dataset.fields||"[]") : []);
+  function fieldSelect(current){
+    return '<option value="">Choose field…</option>'+availableWidgetFields.map(function(f){
+      return '<option value="'+esc(f.fieldId)+'" '+(f.fieldId===current?"selected":"")+'>'+esc(f.fieldName)+'</option>';
+    }).join("");
+  }
+  function renderWidgets(){
+    if(!widgetRoot)return;
+    widgetRoot.innerHTML="";
+    widgets.forEach(function(w,i){
+      const row=document.createElement("div");
+      row.className="field-row custom widget-row";
+      row.innerHTML='<input class="widget-title" aria-label="Widget title" placeholder="KPI title" value="'+esc(w.title||"")+'">'+
+        '<select class="widget-metric" aria-label="Calculation">'+widgetMetrics.map(function(m){return '<option value="'+m+'" '+(w.metric===m?"selected":"")+'>'+m.replace("_"," ")+'</option>';}).join("")+'</select>'+
+        '<select class="widget-field" aria-label="Source field">'+fieldSelect(w.fieldId||"")+'</select>'+
+        '<select class="widget-other" aria-label="Denominator field">'+fieldSelect(w.otherFieldId||"")+'</select>'+
+        '<input class="widget-match" aria-label="Count matching value" placeholder="Equals..." value="'+esc(w.match||"")+'">'+
+        '<select class="widget-format" aria-label="Display format">'+["number","currency","percentage"].map(function(f){return '<option '+(w.format===f?"selected":"")+'>'+f+'</option>';}).join("")+'</select>'+
+        '<button class="btn compact danger widget-remove" type="button">Remove</button>';
+      [[".widget-title","title"],[".widget-metric","metric"],[".widget-field","fieldId"],
+       [".widget-other","otherFieldId"],[".widget-match","match"],[".widget-format","format"]].forEach(function(item){
+        row.querySelector(item[0]).addEventListener("change",function(e){w[item[1]]=e.target.value;syncWidgets();renderWidgets();});
+      });
+      row.querySelector(".widget-title").addEventListener("input",function(e){w.title=e.target.value;syncWidgets();});
+      row.querySelector(".widget-match").addEventListener("input",function(e){w.match=e.target.value;syncWidgets();});
+      row.querySelector(".widget-other").hidden=!["ratio","percentage"].includes(w.metric);
+      row.querySelector(".widget-match").hidden=w.metric!=="count_where";
+      row.querySelector(".widget-field").hidden=w.metric==="count";
+      row.querySelector(".widget-remove").addEventListener("click",function(){widgets.splice(i,1);renderWidgets();syncWidgets();});
+      widgetRoot.appendChild(row);
+    });
+    if(addWidget)addWidget.disabled=widgets.length>=6;
+  }
+  function syncWidgets(){if(widgetHidden)widgetHidden.value=JSON.stringify(widgets);}
+  if(addWidget)addWidget.addEventListener("click",function(){
+    if(widgets.length>=6)return;
+    widgets.push({widgetId:"widget_"+Date.now()+"_"+widgets.length,title:"New KPI",metric:"count",
+      fieldId:"",otherFieldId:"",match:"",format:"number"});
+    syncWidgets();renderWidgets();
+  });
+  renderWidgets();
+
   const mdfPicker=document.querySelector("[data-mdf-multiselect]");
   if(mdfPicker){
     const trigger=mdfPicker.querySelector(".mdf-select-trigger");
