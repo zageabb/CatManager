@@ -3,7 +3,7 @@ import math
 from datetime import date
 
 
-def inspect_panel(core):
+def inspect_panel(core, review_field_id='qualification_review_date'):
     findings=[]
     fields=core.get("supplierFields",[])
     by_id={f.get("fieldId"):f for f in fields}
@@ -26,6 +26,15 @@ def inspect_panel(core):
         if not str(supplier.get("supplierName") or "").strip():
             flag("missing_identity","Missing supplier name.",sid)
         custom=supplier.get("customFields",{}) or {}
+        review=custom.get(review_field_id)
+        if review in (None,""):
+            flag("missing_review","Qualification review date is missing.",sid,review_field_id)
+        else:
+            try:
+                if not isinstance(review,str) or date.fromisoformat(review).isoformat()!=review:
+                    raise ValueError()
+            except ValueError:
+                flag("invalid_review","Qualification review date must use YYYY-MM-DD.",sid,review_field_id)
         for field in fields:
             fid=field.get("fieldId")
             val=custom.get(fid)
@@ -52,10 +61,10 @@ def inspect_panel(core):
     return findings
 
 
-def collect_quality(panels):
+def collect_quality(panels, review_field_id='qualification_review_date'):
     records=[]
     for panel in panels:
-        findings=inspect_panel(panel["data"]["panel"])
+        findings=inspect_panel(panel["data"]["panel"],review_field_id)
         records.append({"panelId":panel["panel_id"],"panelName":panel["panel_name"],
                         "archived":bool(panel.get("archived_at")),"findings":findings})
     return records
