@@ -109,3 +109,9 @@
     grid-template-columns: auto 1fr;
   }
 }
+
+/* DEV-026: accessible read-only rendering for tri-state Boolean supplier data. */
+.boolean-block { display:inline-block; min-width:5.5rem; padding:.28rem .55rem; text-align:center; border-radius:.35rem; font-size:.8rem; font-weight:700; }
+.boolean-yes { background:#d5f5e4; color:#145b37; border:1px solid #7bc9a0; }
+.boolean-no { background:#ffe2e2; color:#8a2424; border:1px solid #e8a2a2; }
+.boolean-unset { background:#e8edf2; color:#3f5164; border:1px solid #b8c3ce; }
