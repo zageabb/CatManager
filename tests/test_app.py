@@ -999,3 +999,53 @@ def test_boolean_field_tristate_in_supplier_and_bulk_editor(client):
     })
     assert client.get("/api/panels/CMP-BOOL").get_json()["panel"]["suppliers"][0]["customFields"]["approved"] is None
     assert b"boolean-unset" in client.get("/panels/CMP-BOOL").data
+
+def test_configurable_supplier_kpi_widgets_and_safe_zero_division(client):
+    create_panel(client, "CMP-KPI")
+    fields = [
+        {"fieldId": "mva", "fieldName": "MVA", "type": "number", "options": []},
+        {"fieldId": "spend", "fieldName": "Spend", "type": "number", "options": []},
+    ]
+    widgets = [
+        {"title": "Suppliers", "metric": "count"},
+        {"title": "MVA", "metric": "sum", "fieldId": "mva"},
+        {"title": "Spend per MVA", "metric": "ratio",
+         "fieldId": "spend", "otherFieldId": "mva"},
+        {"title": "Average spend", "metric": "average", "fieldId": "spend"},
+    ]
+    saved = client.post("/panels/CMP-KPI/configuration", data={
+        "fields_json": json.dumps(fields), "field_groups_json": "[]",
+        "dashboard_widgets_json": json.dumps(widgets),
+    })
+    assert saved.status_code == 302
+    client.post("/panels/CMP-KPI/suppliers/new", data={
+        "supplier_id": "S1", "supplier_name": "One", "custom_mva": "100", "custom_spend": "500"
+    })
+    client.post("/panels/CMP-KPI/suppliers/new", data={
+        "supplier_id": "S2", "supplier_name": "Two", "custom_mva": "200", "custom_spend": "900"
+    })
+    page = client.get("/panels/CMP-KPI")
+    assert page.status_code == 200
+    assert b"Spend per MVA" in page.data
+    assert b"1,400.00" in page.data
+    assert b"300.00" in page.data
+    assert b"4.67" in page.data  # sum(spend)/sum(mva)
+    assert b"700.00" in page.data
+    saved_widgets = client.get("/api/panels/CMP-KPI").get_json()["panel"]["dashboardWidgets"]
+    assert len(saved_widgets) == 4
+
+    # Bad definitions rejected, and prior configuration preserved.
+    failure = client.post("/panels/CMP-KPI/configuration", data={
+        "fields_json": json.dumps(fields), "field_groups_json": "[]",
+        "dashboard_widgets_json": json.dumps([{"title": f"W{i}", "metric": "count"} for i in range(7)]),
+    })
+    assert failure.status_code == 400
+    assert len(client.get("/api/panels/CMP-KPI").get_json()["panel"]["dashboardWidgets"]) == 4
+    client.post("/panels/CMP-KPI/configuration", data={
+        "fields_json": json.dumps(fields), "field_groups_json": "[]",
+        "dashboard_widgets_json": json.dumps([{
+            "title": "Zero denominator", "metric": "ratio",
+            "fieldId": "mva", "otherFieldId": "spend"
+        }]),
+    })
+    assert client.get("/panels/CMP-KPI").status_code == 200
