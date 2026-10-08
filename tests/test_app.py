@@ -1673,3 +1673,59 @@ def test_dev043_supplier_history_page_read_only(client):
     assert b"History" in client.get("/panels/CMP-HISTORY").data
     assert client.get("/api/panels/CMP-HISTORY").get_json()==before
     assert client.get("/panels/CMP-HISTORY/suppliers/UNKNOWN/history").status_code==404
+
+def test_dev044_management_excel_report_without_writing_panel(client):
+    import io
+    from openpyxl import load_workbook
+    create_panel(client, "CMP-REPORT")
+    assert client.post("/panels/CMP-REPORT/suppliers/new",data={
+        "supplier_id":"ABC","supplier_name":"Sample Supplier","custom_rating":"4"
+    }).status_code==302
+    before=client.get("/api/panels/CMP-REPORT").get_json()
+    response=client.get("/panels/CMP-REPORT/management-report.xlsx")
+    assert response.status_code==200
+    assert response.data.startswith(b"PK")
+    assert "attachment" in response.headers["Content-Disposition"]
+    workbook=load_workbook(io.BytesIO(response.data),read_only=True,data_only=True)
+    assert workbook.sheetnames==["Overview","Suppliers","Regional coverage","Supplier actions"]
+    assert workbook["Overview"]["B3"].value=="CMP-REPORT"
+    assert workbook["Overview"]["B6"].value==1
+    assert workbook["Suppliers"]["A2"].value=="ABC"
+    assert workbook["Suppliers"]["B2"].value=="Sample Supplier"
+    assert workbook["Suppliers"]["E2"].value=="Incomplete / not configured"
+    assert client.get("/api/panels/CMP-REPORT").get_json()==before
+    assert client.get("/panels/UNKNOWN/management-report.xlsx").status_code==404
+
+
+def test_dev044_report_includes_qualified_coverage_and_open_actions():
+    import io
+    from openpyxl import load_workbook
+    from supplier_coverage import coverage_summary
+    from supplier_alerts import supplier_alerts
+    from supplier_scoring import score_suppliers
+    from management_report import build_management_workbook
+    core={"panelId":"TEST","panelName":"Test","mdfCodes":["MDF-01"],
+        "leadMdfCode":"MDF-01",
+        "supplierFields":[{"fieldId":"regions","fieldName":"Regions","type":"multiselect_blocks","options":["EU","MEA"]}],
+        "suppliers":[{"supplierId":"S1","supplierName":"Supplier",
+           "customFields":{"regions":["EU"],"qualification_status":"Qualified","qualification_review_date":"2026-10-01"},
+           "actions":[{"title":"Obtain certification","owner":"Manager","dueDate":"2026-11-01","status":"Open"},
+                      {"title":"Old action","owner":"Manager","status":"Completed"}]}]}
+    content=build_management_workbook(core,score_suppliers(core),
+           coverage_summary(core),supplier_alerts(core,"qualification_review_date"),
+           "qualification_status")
+    book=load_workbook(io.BytesIO(content),read_only=True,data_only=True)
+    assert book["Regional coverage"]["D2"].value==1
+    assert book["Regional coverage"]["E3"].value=="Uncovered"
+    assert book["Supplier actions"]["C2"].value=="Obtain certification"
+    assert book["Supplier actions"]["C3"].value is None
+
+def test_dev044_printable_management_summary(client):
+    create_panel(client,"CMP-PRINT")
+    response=client.get("/panels/CMP-PRINT/management-report")
+    assert response.status_code==200
+    assert b"Supplier Management Summary" in response.data
+    assert b"Print / Save as PDF" in response.data
+    assert b"Regional sourcing coverage" in response.data
+    assert b"Outstanding supplier actions" in response.data
+    assert b"Print Management Report" in client.get("/panels/CMP-PRINT").data

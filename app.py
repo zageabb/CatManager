@@ -15,6 +15,7 @@ from supplier_scoring import validate_scoring, score_suppliers
 from supplier_alerts import supplier_alerts
 from supplier_coverage import coverage_summary
 from supplier_history import supplier_history
+from management_report import build_management_workbook
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 CATEGORIES = [
@@ -1363,6 +1364,35 @@ def create_app(test_config=None):
                                supplier_scores=score_suppliers(panel["data"]["panel"]),
                                supplier_alert_rows=supplier_alerts(panel["data"]["panel"], get_dashboard_config()["qualificationReviewFieldId"]),
                                coverage=coverage_summary(panel["data"]["panel"], get_dashboard_config()["qualificationFieldId"]))
+
+    @app.route("/panels/<panel_id>/management-report")
+    def panel_management_print(panel_id):
+        panel=get_panel_or_404(panel_id)
+        core=panel["data"]["panel"]
+        config=get_dashboard_config()
+        return render_template("management_print.html",panel=panel,
+            generated_at=now_iso(),
+            scores=score_suppliers(core),
+            coverage=coverage_summary(core,config["qualificationFieldId"]),
+            alerts=supplier_alerts(core,config["qualificationReviewFieldId"]),
+            qualification_field=config["qualificationFieldId"])
+
+    @app.route("/panels/<panel_id>/management-report.xlsx")
+    def panel_management_report(panel_id):
+        panel = get_panel_or_404(panel_id)
+        core = panel["data"]["panel"]
+        config = get_dashboard_config()
+        content = build_management_workbook(
+            core,
+            score_suppliers(core),
+            coverage_summary(core, config["qualificationFieldId"]),
+            supplier_alerts(core, config["qualificationReviewFieldId"]),
+            config["qualificationFieldId"],
+        )
+        return send_file(io.BytesIO(content),
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                         as_attachment=True,
+                         download_name=panel_id+"-management-report.xlsx")
 
     @app.route("/panels/<panel_id>/suppliers/compare")
     def supplier_compare(panel_id):

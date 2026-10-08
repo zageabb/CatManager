@@ -186,3 +186,8 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [x] Read-only supplier history from audit entries for supplier edits, bulk edits, Excel imports and action updates, with field-by-field before/after values, dates, actors and numeric rating history. Must handle old and missing audit records without fabricating trends; test and pass CI before main merge.
 
   - Evidence: supplier_history.py reconstructs exact per-field change records from direct edits, supplier action changes, Excel and bulk imports; shows audited numeric values without inventing historical states. Regression tests passed, PR CI 37839253145 on 8bf15bc370c35b622d9114caead9ea5c84758db7.
+
+### DEV-044 — Management summary reports
+- [x] Deliver a shareable Excel management workbook for one panel: overview, supplier qualification and weighted scores, region sourcing risks, review alerts and open actions. Derive values from existing calculations, include reporting timestamp, preserve existing records and include regression tests. Add printable HTML management view if suitable. Verify CI before merge.
+
+  - Evidence: current-state XLSX with overview, supplier qualifications and weighted scores, regional source risks and open actions, plus a print-friendly HTML summary that can be saved to PDF. Audit and supplier JSON remain untouched. Regression tests passed in PR CI 37839978557 on e28059d103e39a6751a1b034c2295e85f503c2f1.
