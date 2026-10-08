@@ -1394,6 +1394,33 @@ def create_app(test_config=None):
                          as_attachment=True,
                          download_name=panel_id+"-management-report.xlsx")
 
+    @app.route("/suppliers/<path:supplier_id>/profile")
+    def cross_panel_supplier_profile(supplier_id):
+        # Supplier IDs are authoritative: names alone are not safe join keys.
+        matches=[]
+        config=get_dashboard_config()
+        records=get_db().execute("SELECT * FROM panels ORDER BY panel_name, panel_id").fetchall()
+        for record in records:
+            panel=row_to_panel(record)
+            core=panel["data"]["panel"]
+            supplier=next((x for x in core.get("suppliers",[]) if x.get("supplierId")==supplier_id),None)
+            if supplier is None:
+                continue
+            score=next((x for x in score_suppliers(core) if x["supplierId"]==supplier_id),None)
+            alert=next((x for x in supplier_alerts(core,config["qualificationReviewFieldId"]) if x["supplierId"]==supplier_id),None)
+            fields={f["fieldId"]:f for f in core.get("supplierFields",[])}
+            region_fields=[{"name":fields[key]["fieldName"],"regions":value}
+                           for key,value in supplier.get("customFields",{}).items()
+                           if key in fields and fields[key].get("type")=="multiselect_blocks" and isinstance(value,list)]
+            matches.append({"panel":panel,"supplier":supplier,"score":score,"alert":alert,
+                            "regions":region_fields,
+                            "qualification":supplier.get("customFields",{}).get(config["qualificationFieldId"]),
+                            "openActions":[x for x in supplier.get("actions",[]) if x.get("status")!="Completed"]})
+        if not matches:
+            from flask import abort
+            abort(404)
+        return render_template("supplier_profile.html",supplier_id=supplier_id,matches=matches)
+
     @app.route("/panels/<panel_id>/suppliers/compare")
     def supplier_compare(panel_id):
         panel = get_panel_or_404(panel_id)
