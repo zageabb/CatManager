@@ -383,7 +383,7 @@
     const header=supplierTable.tHead.rows[0];
     const headings=Array.from(header.cells);
     const rowCells=new Map(rows.map(row=>[row,Array.from(row.cells)]));
-    const fixed=new Set([0,1,headings.length-1]);
+    const fixed=new Set([0,1,2,headings.length-1]);
     const storageKey="catmanager:columns:"+supplierTable.dataset.panelId;
     const initial=Array.from({length:headings.length},(_,i)=>i);
     let columnOrder=initial.slice();
@@ -395,7 +395,7 @@
         if(!saved||!Array.isArray(saved.order))return;
         const order=saved.order.filter(i=>Number.isInteger(i)&&i>=0&&i<headings.length);
         if(order.length!==headings.length||new Set(order).size!==headings.length)return;
-        columnOrder=[0,1,...order.filter(i=>!fixed.has(i)),headings.length-1];
+        columnOrder=[0,1,2,...order.filter(i=>!fixed.has(i)),headings.length-1];
         hiddenColumns=new Set((saved.hidden||[]).filter(i=>!fixed.has(i)&&Number.isInteger(i)&&i>=0&&i<headings.length));
       }catch(_err){ /* Browser storage can be unavailable; defaults remain usable. */ }
     }
@@ -452,8 +452,8 @@
       const sign=direction.value==="desc"?-1:1;
       const collator=new Intl.Collator(undefined,{numeric:true,sensitivity:"base"});
       const visible=rows.filter(row=>{
-        const cells=rowCells.get(row).slice(0,-1);
-        const candidates=filterIndex===null?cells:[cells[filterIndex]];
+        const cells=rowCells.get(row).slice(1,-1);
+        const candidates=filterIndex===null?cells:[originalCell(row,filterIndex)];
         const match=candidates.some(cell=>cell&&normalise(cell.dataset.filter??cell.textContent).includes(needle));
         row.hidden=!match;
         return match;
@@ -479,8 +479,24 @@
     }
     [query,filterField,sortField,direction].forEach(el=>el.addEventListener(el===query?"input":"change",applySupplierView));
     supplierControls.querySelector(".supplier-filter-reset").addEventListener("click",()=>{
-      query.value="";filterField.value="all";sortField.value="1";direction.value="asc";applySupplierView();
+      query.value="";filterField.value="all";sortField.value="2";direction.value="asc";applySupplierView();
     });
+    const comparison=document.querySelector("#supplier-compare-form");
+    if(comparison){
+      const toggles=Array.from(supplierTable.querySelectorAll(".supplier-compare-check"));
+      const button=comparison.querySelector(".supplier-compare-submit");
+      function refreshComparison(){
+        const n=toggles.filter(box=>box.checked).length;
+        button.disabled=n<2||n>5;
+        button.textContent="Compare selected suppliers ("+n+"/5)";
+        toggles.forEach(box=>{box.disabled=!box.checked&&n>=5;});
+      }
+      toggles.forEach(box=>box.addEventListener("change",refreshComparison));
+      comparison.addEventListener("submit",event=>{
+        if(toggles.filter(box=>box.checked).length<2){event.preventDefault();}
+      });
+      refreshComparison();
+    }
     applySupplierView();
   }
 
