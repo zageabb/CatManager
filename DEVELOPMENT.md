@@ -83,3 +83,5 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 
 - [x] DEV-028 Supplier-level KPI calculated columns. Add panel/supplier/both visibility per existing widget (backward-compatible default: panel); calculate each supplier row with the same source fields, base-currency conversion, missing-value and zero-denominator safeguards as the panel KPI; supplier columns are read-only. Extend tests for view settings and calculations. Merge to main after CI passes for UDA.
   - Evidence: Panel Configuration now offers Panel KPI / Supplier column / Both per widget; supplier table renders read-only derived values, preserving currency conversion and zero-division behaviour, and defaults older widgets to panel-only. Added regression tests; CI run 37769925273 passed on d2bad128b06eb117c618c3107047682933ba9e2b.
+
+- [ ] DEV-029 Star Rating custom type (0–5 in half-point steps), numeric editing/validation, accessible star display in supplier list, reusable templates, star-formatted KPI cards and supplier KPI columns, tests and CI before merge to main.
