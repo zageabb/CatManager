@@ -166,9 +166,10 @@
         '<select class="widget-other" aria-label="Denominator field">'+fieldSelect(w.otherFieldId||"")+'</select>'+
         '<input class="widget-match" aria-label="Count matching value" placeholder="Equals..." value="'+esc(w.match||"")+'">'+
         '<select class="widget-format" aria-label="Display format">'+["number","currency","percentage"].map(function(f){return '<option '+(w.format===f?"selected":"")+'>'+f+'</option>';}).join("")+'</select>'+
+        '<select class="widget-display" aria-label="Display location">'+["panel","supplier","both"].map(function(d){return '<option value="'+d+'" '+((w.display||"panel")===d?"selected":"")+'>'+({panel:"Panel KPI",supplier:"Supplier column",both:"Both"}[d])+'</option>';}).join("")+'</select>'+
         '<button class="btn compact danger widget-remove" type="button">Remove</button>';
       [[".widget-title","title"],[".widget-metric","metric"],[".widget-field","fieldId"],
-       [".widget-other","otherFieldId"],[".widget-match","match"],[".widget-format","format"]].forEach(function(item){
+       [".widget-other","otherFieldId"],[".widget-match","match"],[".widget-format","format"],[".widget-display","display"]].forEach(function(item){
         row.querySelector(item[0]).addEventListener("change",function(e){w[item[1]]=e.target.value;syncWidgets();renderWidgets();});
       });
       row.querySelector(".widget-title").addEventListener("input",function(e){w.title=e.target.value;syncWidgets();});
@@ -185,7 +186,7 @@
   if(addWidget)addWidget.addEventListener("click",function(){
     if(widgets.length>=6)return;
     widgets.push({widgetId:"widget_"+Date.now()+"_"+widgets.length,title:"New KPI",metric:"count",
-      fieldId:"",otherFieldId:"",match:"",format:"number"});
+      fieldId:"",otherFieldId:"",match:"",format:"number",display:"panel"});
     syncWidgets();renderWidgets();
   });
   renderWidgets();

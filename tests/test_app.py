@@ -1080,3 +1080,55 @@ def test_currency_aware_kpi_sum_uses_base_currency_rates(client):
     response=client.get("/panels/CMP-FX")
     assert response.status_code==200
     assert "£186.00" in response.get_data(as_text=True)
+
+def test_supplier_level_kpi_columns_and_display_modes(client):
+    create_panel(client, "CMP-SUP-KPI")
+    fields = [
+        {"fieldId": "mva", "fieldName": "MVA", "type": "number"},
+        {"fieldId": "annual_spend", "fieldName": "Spend", "type": "number"},
+        {"fieldId": "spend_currency", "fieldName": "Currency", "type": "text"},
+    ]
+    widgets = [
+        {"title": "Spend per MVA", "metric": "ratio", "fieldId": "annual_spend",
+         "otherFieldId": "mva", "format": "currency", "display": "both"},
+        {"title": "Supplier only", "metric": "sum", "fieldId": "mva",
+         "display": "supplier"},
+        {"title": "Panel only", "metric": "count", "display": "panel"},
+    ]
+    response = client.post("/panels/CMP-SUP-KPI/configuration", data={
+        "field_groups_json": "[]", "fields_json": json.dumps(fields),
+        "dashboard_widgets_json": json.dumps(widgets),
+    })
+    assert response.status_code == 302
+    for supplier_id, mva, spend, currency in [
+        ("S1", "100", "500", "GBP"),
+        ("S2", "200", "900", "GBP"),
+        ("S3", "0", "100", "GBP"),
+        ("S4", "10", "100", "XYZ"),
+    ]:
+        assert client.post("/panels/CMP-SUP-KPI/suppliers/new", data={
+            "supplier_id": supplier_id, "supplier_name": supplier_id,
+            "custom_mva": mva, "custom_annual_spend": spend,
+            "custom_spend_currency": currency,
+        }).status_code == 302
+    html = client.get("/panels/CMP-SUP-KPI").get_data(as_text=True)
+    assert html.count('class="computed-kpi-head"') == 2
+    assert html.count('class="computed-kpi-cell"') == 8
+    assert "£5.00" in html
+    assert "£4.50" in html
+    assert 'class="empty-kpi"' in html
+    assert "Panel only" in html
+    assert "Supplier only" in html
+    assert "£5.00" in html
+    data = client.get("/api/panels/CMP-SUP-KPI").get_json()
+    assert [x["display"] for x in data["panel"]["dashboardWidgets"]] == ["both", "supplier", "panel"]
+
+    # Existing widget definitions without display remain panel-only.
+    widgets[0].pop("display")
+    response = client.post("/panels/CMP-SUP-KPI/configuration", data={
+        "field_groups_json": "[]", "fields_json": json.dumps(fields),
+        "dashboard_widgets_json": json.dumps(widgets),
+    })
+    assert response.status_code == 302
+    html = client.get("/panels/CMP-SUP-KPI").get_data(as_text=True)
+    assert html.count('class="computed-kpi-head"') == 1
