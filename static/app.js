@@ -166,9 +166,11 @@
     });
     if(!valid)return;
     fetch(widgetRoot.dataset.previewUrl,{
-      method:"POST",headers:{"Content-Type":"application/json"},
+      method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":widgetRoot.dataset.csrfToken||""},
       body:JSON.stringify({widgets:widgets})
     }).then(async response=>{
+      const contentType=response.headers.get("content-type")||"";
+      if(!contentType.includes("application/json"))throw new Error("KPI preview request failed (HTTP "+response.status+"). Refresh the page and try again.");
       const data=await response.json();
       if(requestId!==previewRequest)return;
       if(!response.ok)throw new Error(data.error||"Unable to preview");
