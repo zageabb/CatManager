@@ -205,3 +205,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 ### DEV-047 — Governed supplier master synchronisation
 - [x] Provide panel-scoped supplier master difference preview for exact active BPID matches only. Require a confirmation token bound to current master and panel values, protect archived panels, and audit every applied update. Never touch supplier custom assessments or unknown/inactive master records. Add behavioural tests, verify CI, merge to main.
   - Evidence: signed 30-minute per-panel preview, exact active BPID comparison for name/address/postcode, live conflict checks before applying changes, supplier-scoped audits, unchanged custom fields and archived panel guard. CI 37847400890 passed at fee5452dbf75df6f4e09450e2dbfb3fbd6ccf597.
+
+### DEV-048 — Application security and migrations (phase 1)
+- [ ] Introduce explicitly opt-in CSRF enforcement with signed session tokens and legacy-compatible HTML form injection, production secret validation, secure cookie defaults and numbered SQLite migration ledger. Preserve test compatibility; add security and migration regression tests, pass CI. Full multi-user authentication/authorization remains separately scoped; do not claim it is delivered.
