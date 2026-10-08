@@ -201,3 +201,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [x] Add a read-only, cross-panel quality dashboard highlighting missing supplier identity and configured required fields, invalid star/number/region selections, absent review dates, orphaned custom-field values, and broken scorecard references. Group findings by panel and supplier with direct remediation links, no silent repair. Add regression tests and verify CI before merge.
 
   - Evidence: read-only `/data-quality` dashboard highlights missing identity/required values, invalid star, numeric and multi-select coverage values, missing/invalid configured review dates, orphan custom values, and invalid KPI/scoring field references; findings link to panels/suppliers. Regression tests passed in PR CI 37846055675 for b1f7e013aa4fa1e5c1a09a9189ce8927623e167e.
+
+### DEV-047 — Governed supplier master synchronisation
+- [ ] Provide panel-scoped supplier master difference preview for exact active BPID matches only. Require a confirmation token bound to current master and panel values, protect archived panels, and audit every applied update. Never touch supplier custom assessments or unknown/inactive master records. Add behavioural tests, verify CI, merge to main.
