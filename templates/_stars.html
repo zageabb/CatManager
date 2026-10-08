@@ -1,0 +1,8 @@
+{% macro stars(value) -%}
+{% if value is not none and value != '' %}
+<span class="star-rating" role="img" aria-label="{{ '%.1f'|format(value|float) }} out of 5 stars">
+  <span class="star-rating-track" aria-hidden="true">★★★★★<span class="star-rating-fill" style="width:{{ (value|float / 5 * 100)|round(1) }}%">★★★★★</span></span>
+  <span class="star-rating-number">{{ '%.1f'|format(value|float) }}/5</span>
+</span>
+{% else %}<span class="empty-kpi">—</span>{% endif %}
+{%- endmacro %}
