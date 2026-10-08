@@ -33,6 +33,12 @@ def export_suppliers(core):
         custom = supplier.get("customFields", {})
         ws.append([supplier["supplierId"], signature(custom)] +
                   [encode_value(custom.get(f["fieldId"]), f["type"]) for f in fields])
+    # Force text fields to remain literal strings, even when they start with
+    # '=', '+', '-' or '@'. This prevents exported supplier data becoming formulas.
+    for row in ws.iter_rows(min_row=2):
+        for cell in row:
+            if isinstance(cell.value, str):
+                cell.data_type = "s"
     ws.freeze_panes = "C2"
     ws.auto_filter.ref = ws.dimensions
     ws.column_dimensions["A"].width = 22
