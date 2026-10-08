@@ -144,3 +144,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 ### DEV-037 — Unsaved changes protection
 - [x] Add dirty-form navigation warnings on panel metadata/configuration, supplier edit/new, and bulk edit. Track user input/change (including dynamic widgets), avoid warning on successful form submission or unchanged forms, and use native beforeunload to cover reload/browser navigation. Regression tests and CI required.
   - Evidence: editing forms marked with data-unsaved-guard; browser beforeunload and navigation confirmations react to user edits, including dynamic editors; normal save submissions bypass warning. Regression tests, PR CI run 37814176992 passed on 561c48e4e6b5544733f8d2742f798378d0e5a708.
+
+### DEV-034 — Excel supplier round-trip (in progress)
+- [ ] Export a native XLSX workbook containing panel ID, field-ID-aligned editable supplier custom values and an integrity baseline. Import must validate exact supplier IDs, column fields, value types and initial baseline, show a preview without changes, and require explicit confirmation before atomic audited application. Preserve fixed supplier master data; no silent updates. Tests and CI before merging.
