@@ -191,3 +191,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [x] Deliver a shareable Excel management workbook for one panel: overview, supplier qualification and weighted scores, region sourcing risks, review alerts and open actions. Derive values from existing calculations, include reporting timestamp, preserve existing records and include regression tests. Add printable HTML management view if suitable. Verify CI before merge.
 
   - Evidence: current-state XLSX with overview, supplier qualifications and weighted scores, regional source risks and open actions, plus a print-friendly HTML summary that can be saved to PDF. Audit and supplier JSON remain untouched. Regression tests passed in PR CI 37839978557 on e28059d103e39a6751a1b034c2295e85f503c2f1.
+
+### DEV-045 — Cross-panel supplier profile
+- [ ] Add read-only supplier profile keyed by exact BPID/supplierId across active and archived panels, showing panel memberships, qualifications, review dates, weighted scores, regional selections and open actions; explicitly avoid merging similar names or treating panel-specific values as global. Link from supplier table; tests, CI and merge.
