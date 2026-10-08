@@ -193,4 +193,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
   - Evidence: current-state XLSX with overview, supplier qualifications and weighted scores, regional source risks and open actions, plus a print-friendly HTML summary that can be saved to PDF. Audit and supplier JSON remain untouched. Regression tests passed in PR CI 37839978557 on e28059d103e39a6751a1b034c2295e85f503c2f1.
 
 ### DEV-045 — Cross-panel supplier profile
-- [ ] Add read-only supplier profile keyed by exact BPID/supplierId across active and archived panels, showing panel memberships, qualifications, review dates, weighted scores, regional selections and open actions; explicitly avoid merging similar names or treating panel-specific values as global. Link from supplier table; tests, CI and merge.
+- [x] Add read-only supplier profile keyed by exact BPID/supplierId across active and archived panels, showing panel memberships, qualifications, review dates, weighted scores, regional selections and open actions; explicitly avoid merging similar names or treating panel-specific values as global. Link from supplier table; tests, CI and merge.
+
+  - Evidence: exact supplierId cross-panel read-only profile with memberships, qualification, review status, weighted scores, coverage and open actions. Same-named different BPIDs remain separate. Regression tests passed in PR CI run 37841687467 on commit 432df803c4e49921cf784b245c6c13f8ff456fcb.
