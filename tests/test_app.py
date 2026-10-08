@@ -1611,9 +1611,10 @@ def test_dev042_full_panel_template_roundtrip_without_supplier_data(client):
     }).status_code==302
     resp=client.post("/panels/CMP-TEMPLATE-SOURCE/save-template",data={"name":"Standard rating panel"})
     assert resp.status_code==302
-    from app import get_db
-    with client.application.app_context():
-        templates=get_db().execute("SELECT template_id,config_json FROM panel_templates").fetchall()
+    import sqlite3
+    with sqlite3.connect(client.application.config["DATABASE"]) as conn:
+        conn.row_factory=sqlite3.Row
+        templates=conn.execute("SELECT template_id,config_json FROM panel_templates").fetchall()
         assert len(templates)==1
         tid=templates[0]["template_id"]
         saved=json.loads(templates[0]["config_json"])
