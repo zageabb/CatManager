@@ -1425,7 +1425,7 @@ def create_app(test_config=None):
     @app.route("/data-quality")
     def data_quality_dashboard():
         panels=[row_to_panel(r) for r in get_db().execute("SELECT * FROM panels ORDER BY panel_name").fetchall()]
-        records=collect_quality(panels)
+        records=collect_quality(panels,get_dashboard_config()['qualificationReviewFieldId'])
         return render_template("data_quality.html",records=records,
             total_findings=sum(len(record["findings"]) for record in records))
 
