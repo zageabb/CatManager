@@ -908,3 +908,38 @@ def test_settings_hub_is_accessible_from_header(client):
     assert b"Supplier master" in settings.data
     assert b"MDF master data" in settings.data
     assert b"Panel import" in settings.data
+
+def test_duplicate_panel_preserves_configuration_but_not_suppliers_or_history(client):
+    create_panel(client, "CMP-SOURCE")
+    client.post("/panels/CMP-SOURCE/suppliers/new", data={
+        "supplier_id": "SUP-DUP", "supplier_name": "Supplier to exclude",
+        "address": "Test", "post_code": "", "custom_rating": "200",
+    })
+    source = client.get("/api/panels/CMP-SOURCE").get_json()["panel"]
+    assert len(source["suppliers"]) == 1
+    response = client.get("/panels/CMP-SOURCE/duplicate")
+    assert response.status_code == 200
+    assert b"Copy of Test Transformers" in response.data
+    assert b"Duplicate Panel" in client.get("/panels/CMP-SOURCE").data
+
+    response = client.post("/panels/CMP-SOURCE/duplicate", data={
+        "panel_id": "CMP-COPY", "panel_name": "Independent copy",
+        "category": "Transformers", "business": "GI", "region_level": "Country",
+        "region_value": "United Kingdom", "owner": "Test Owner",
+        "mdf_codes": ["MDF-TR-001"], "lead_mdf_code": "MDF-TR-001",
+    })
+    assert response.status_code == 302
+    duplicate = client.get("/api/panels/CMP-COPY").get_json()["panel"]
+    assert duplicate["suppliers"] == []
+    assert duplicate["supplierFields"] == source["supplierFields"]
+    assert duplicate["fieldGroups"] == source["fieldGroups"]
+    assert duplicate["mdfCodes"] == source["mdfCodes"]
+    assert len(duplicate["metadata"]["auditTrail"]) == 1
+    assert duplicate["metadata"]["auditTrail"][0]["action"] == "panel_duplicated"
+    assert duplicate["metadata"]["auditTrail"][0]["details"]["sourcePanelId"] == "CMP-SOURCE"
+    assert len(client.get("/api/panels/CMP-SOURCE").get_json()["panel"]["suppliers"]) == 1
+    assert client.post("/panels/CMP-SOURCE/duplicate", data={
+        "panel_id": "CMP-COPY", "panel_name": "Duplicate", "category": "Transformers",
+        "business": "GI", "region_level": "Country", "owner": "Test Owner",
+        "mdf_codes": ["MDF-TR-001"], "lead_mdf_code": "MDF-TR-001",
+    }).status_code == 409
