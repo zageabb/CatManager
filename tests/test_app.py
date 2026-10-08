@@ -1241,3 +1241,45 @@ def test_mdf_search_rows_can_be_hidden_by_client_filter():
     assert ".mdf-option[hidden]{display:none!important;}" in css
     assert "row.hidden=q && !row.dataset.search.includes(q)" in js
     assert 'data-search="{{ (m.code ~ \' \' ~ m.description)|lower }}"' in template
+
+def test_supplier_table_filter_sort_controls_for_custom_types(client):
+    create_panel(client, "CMP-FILTER")
+    fields = [
+        {"fieldId": "rating", "fieldName": "Quality", "type": "stars"},
+        {"fieldId": "coverage", "fieldName": "Regions", "type": "multiselect_blocks",
+         "options": ["EU", "NAM", "MEA"]},
+        {"fieldId": "approved", "fieldName": "Approved", "type": "boolean"},
+    ]
+    response = client.post("/panels/CMP-FILTER/configuration", data={
+        "field_groups_json": "[]", "fields_json": json.dumps(fields),
+        "dashboard_widgets_json": "[]",
+    })
+    assert response.status_code == 302
+    assert client.post("/panels/CMP-FILTER/suppliers/new", data={
+        "supplier_id": "SUP1", "supplier_name": "Alpha",
+        "custom_rating": "4.5", "custom_coverage": ["EU", "MEA"], "custom_approved": "true",
+    }).status_code == 302
+    page = client.get("/panels/CMP-FILTER")
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert 'data-supplier-controls' in html
+    assert 'data-supplier-table' in html
+    assert 'class="supplier-table-search"' in html
+    assert 'class="supplier-filter-field"' in html
+    assert 'class="supplier-sort-field"' in html
+    assert 'data-type="number"' in html
+    assert 'data-filter="EU MEA"' in html
+    assert 'data-filter="Yes"' in html
+    # UI filtering must never remove supplier information from server-side storage.
+    assert len(client.get("/api/panels/CMP-FILTER").get_json()["panel"]["suppliers"]) == 1
+
+
+def test_supplier_filter_visibility_and_typed_sort_js_contract():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "static" / "app.js").read_text()
+    css = (root / "static" / "app.css").read_text()
+    assert 'normalise(cell.dataset.filter??cell.textContent).includes(needle)' in js
+    assert 'ca.dataset.type==="number"' in js
+    assert 'row.hidden=!match' in js
+    assert '.supplier-data-row[hidden]{display:none!important;}' in css
