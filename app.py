@@ -11,6 +11,7 @@ from flask import Flask, flash, g, jsonify, redirect, render_template, request, 
 
 from legacy_demo_data import LEGACY_DEMO_PANELS, LEGACY_MDF_CODES
 from supplier_excel import export_suppliers, preview_import, signature
+from supplier_scoring import validate_scoring, score_suppliers
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 CATEGORIES = [
@@ -1147,6 +1148,7 @@ def create_app(test_config=None):
             fields = parse_fields(request.form.get("fields_json","[]"))
             group_ids = {g["groupId"] for g in field_groups}
             widgets = parse_dashboard_widgets(request.form.get("dashboard_widgets_json", json.dumps(core.get("dashboardWidgets", []))), fields)
+            scoring = validate_scoring(json.loads(request.form.get("scoring_criteria_json", json.dumps(core.get("scoringCriteria", [])))), fields)
             unknown_groups = sorted({f["groupId"] for f in fields if f.get("groupId") and f["groupId"] not in group_ids})
             if unknown_groups:
                 raise ValueError("Custom fields reference unknown field groups: " + ", ".join(unknown_groups))
@@ -1205,6 +1207,7 @@ def create_app(test_config=None):
         core["fieldGroups"] = field_groups
         core["supplierFields"] = fields
         core["dashboardWidgets"] = widgets
+        core["scoringCriteria"] = scoring
         changes = panel_change_summary(before, data)
         if changes:
             append_audit(data, "panel_configuration_updated", panel["panel_id"], {"changes": changes})
@@ -1305,7 +1308,8 @@ def create_app(test_config=None):
         supplier_widgets, supplier_widget_rows = calculate_supplier_widgets(panel["data"]["panel"])
         return render_template("panel_view.html", panel=panel,
                                dashboard_widgets=calculate_dashboard_widgets(panel["data"]["panel"]),
-                               supplier_widgets=supplier_widgets, supplier_widget_rows=supplier_widget_rows)
+                               supplier_widgets=supplier_widgets, supplier_widget_rows=supplier_widget_rows,
+                               supplier_scores=score_suppliers(panel["data"]["panel"]))
 
     @app.route("/panels/<panel_id>/suppliers/compare")
     def supplier_compare(panel_id):
