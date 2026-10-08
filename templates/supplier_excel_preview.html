@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Review Excel supplier import{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('panel_view', panel_id=panel.panel_id) }}">{{ panel.panel_id }}</a><span>›</span><span>Excel Import Preview</span>{% endblock %}
+{% block content %}
+<div class="page-title-row"><div><h1>Review supplier Excel changes</h1><p class="subtitle">No records have been changed yet. Confirm to apply all approved edits together.</p></div></div>
+<section class="table-card"><h2>{{ changes|length }} supplier(s) with changes</h2>
+{% if changes %}<div class="table-scroll"><table class="data-table"><thead><tr><th>Supplier ID</th><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>
+{% for change in changes %}{% for key, value in change.after.items() %}{% if change.before.get(key) != value %}<tr><td>{{ change.supplierId }}</td><td>{{ key }}</td><td>{{ change.before.get(key,'') }}</td><td>{{ value }}</td></tr>{% endif %}{% endfor %}{% endfor %}
+</tbody></table></div>{% else %}<p>No changes detected in this workbook.</p>{% endif %}
+<form method="post" action="{{ url_for('supplier_excel_confirm', panel_id=panel.panel_id) }}" class="form-actions">
+<input type="hidden" name="token" value="{{ token }}">
+<a class="btn" href="{{ url_for('panel_view', panel_id=panel.panel_id) }}">Cancel without changes</a>
+<button class="btn primary" type="submit">Confirm supplier updates</button></form></section>
+{% endblock %}

@@ -1332,3 +1332,58 @@ def test_dev037_dirty_navigation_guard_js_contract():
     assert 'if(dirty&&!submitting)' in js
     assert 'form.addEventListener("submit",()=>{submitting=true;})' in js
     assert 'Leave without saving?' in js
+
+def test_supplier_excel_export_preview_confirm_and_conflict(client):
+    import io
+    from openpyxl import load_workbook
+    create_panel(client,"CMP-EXCEL")
+    assert client.post("/panels/CMP-EXCEL/suppliers/new",data={
+        "supplier_id":"BP1","supplier_name":"Supplier One","custom_rating":"3"
+    }).status_code==302
+    export=client.get("/panels/CMP-EXCEL/suppliers/excel")
+    assert export.status_code==200
+    assert export.data.startswith(b"PK")
+    book=load_workbook(io.BytesIO(export.data))
+    ws=book["Suppliers"]
+    assert ws["A1"].value=="Supplier ID"
+    assert ws["C1"].value=="rating"
+    ws["C2"]=4.5
+    updated=io.BytesIO()
+    book.save(updated)
+    preview=client.post("/panels/CMP-EXCEL/suppliers/excel",data={
+        "workbook":(io.BytesIO(updated.getvalue()),"changes.xlsx")
+    },content_type="multipart/form-data")
+    assert preview.status_code==200
+    assert b"Review supplier Excel changes" in preview.data
+    assert b"BP1" in preview.data
+    assert client.get("/api/panels/CMP-EXCEL").get_json()["panel"]["suppliers"][0]["customFields"]["rating"]==3.0
+    import re
+    token=re.search(rb'name="token" value="([^"]+)"',preview.data).group(1).decode()
+    commit=client.post("/panels/CMP-EXCEL/suppliers/excel/confirm",data={"token":token})
+    assert commit.status_code==302
+    assert client.get("/api/panels/CMP-EXCEL").get_json()["panel"]["suppliers"][0]["customFields"]["rating"]==4.5
+    assert "supplier_excel_import" in [x["action"] for x in client.get("/api/panels/CMP-EXCEL").get_json()["panel"]["metadata"]["auditTrail"]]
+    # Previous export baseline is now stale; it must not overwrite a newer edit.
+    old=client.post("/panels/CMP-EXCEL/suppliers/excel",data={
+        "workbook":(io.BytesIO(updated.getvalue()),"old.xlsx")
+    },content_type="multipart/form-data",follow_redirects=True)
+    assert b"changed since workbook export" in old.data
+
+
+def test_supplier_excel_rejects_schema_mismatch_and_invalid_rating(client):
+    import io
+    from openpyxl import load_workbook
+    create_panel(client,"CMP-EXCEL-ERR")
+    assert client.post("/panels/CMP-EXCEL-ERR/suppliers/new",data={
+        "supplier_id":"BP1","supplier_name":"One","custom_rating":"2"
+    }).status_code==302
+    raw=client.get("/panels/CMP-EXCEL-ERR/suppliers/excel").data
+    book=load_workbook(io.BytesIO(raw))
+    ws=book["Suppliers"]
+    ws["C1"]="bad_field"
+    invalid=io.BytesIO();book.save(invalid)
+    response=client.post("/panels/CMP-EXCEL-ERR/suppliers/excel",data={
+        "workbook":(io.BytesIO(invalid.getvalue()),"invalid.xlsx")
+    },content_type="multipart/form-data",follow_redirects=True)
+    assert b"Column headers" in response.data
+    assert client.get("/api/panels/CMP-EXCEL-ERR").get_json()["panel"]["suppliers"][0]["customFields"]["rating"]==2.0
