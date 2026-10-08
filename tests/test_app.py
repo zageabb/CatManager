@@ -1543,3 +1543,31 @@ def test_dev039_supplier_action_rejects_unsafe_status_and_empty_owner(client):
                     {"title": "Task", "owner": "Lead", "status": "Escalated"}):
         assert client.post(url, data=changes).status_code == 400
     assert client.get("/api/panels/CMP-ACT-ERR").get_json()["panel"]["suppliers"][0].get("actions", []) == []
+
+def test_dev040_review_alert_classification_and_actions():
+    from datetime import date
+    from supplier_alerts import classify_due_date, supplier_alerts
+    today=date(2026,10,8)
+    assert classify_due_date("2026-10-07",today)=="Overdue"
+    assert classify_due_date("2026-10-08",today)=="Due soon"
+    assert classify_due_date("2026-11-07",today)=="Due soon"
+    assert classify_due_date("2026-11-08",today)=="Future"
+    assert classify_due_date("",today)=="Missing"
+    assert classify_due_date("not-a-date",today)=="Invalid"
+    core={"suppliers":[{"supplierId":"A","supplierName":"Alpha",
+        "customFields":{"review":"2026-10-07"},
+        "actions":[{"title":"Renew","status":"Open","dueDate":"2026-10-06"},
+                   {"title":"Done","status":"Completed","dueDate":"2026-10-06"}]}]}
+    rows=supplier_alerts(core,"review",today)
+    assert rows[0]["reviewStatus"]=="Overdue"
+    assert len(rows[0]["actions"])==1
+    assert rows[0]["actions"][0]["status"]=="Overdue"
+
+
+def test_dev040_panel_renders_qualification_alerts(client):
+    create_panel(client,"CMP-ALERT")
+    response=client.get("/panels/CMP-ALERT")
+    assert response.status_code==200
+    assert b"Qualification review alerts" in response.data
+    assert b"No qualification reviews or actions require attention." in response.data
+    assert b"Review status" in response.data

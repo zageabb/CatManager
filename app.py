@@ -12,6 +12,7 @@ from flask import Flask, flash, g, jsonify, redirect, render_template, request, 
 from legacy_demo_data import LEGACY_DEMO_PANELS, LEGACY_MDF_CODES
 from supplier_excel import export_suppliers, preview_import, signature
 from supplier_scoring import validate_scoring, score_suppliers
+from supplier_alerts import supplier_alerts
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 CATEGORIES = [
@@ -1309,7 +1310,8 @@ def create_app(test_config=None):
         return render_template("panel_view.html", panel=panel,
                                dashboard_widgets=calculate_dashboard_widgets(panel["data"]["panel"]),
                                supplier_widgets=supplier_widgets, supplier_widget_rows=supplier_widget_rows,
-                               supplier_scores=score_suppliers(panel["data"]["panel"]))
+                               supplier_scores=score_suppliers(panel["data"]["panel"]),
+                               supplier_alert_rows=supplier_alerts(panel["data"]["panel"], get_dashboard_config()["qualificationReviewFieldId"]))
 
     @app.route("/panels/<panel_id>/suppliers/compare")
     def supplier_compare(panel_id):
