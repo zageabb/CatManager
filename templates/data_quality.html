@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Data quality{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('portfolio') }}">Category panel</a><span>›</span><span>Data quality</span>{% endblock %}
+{% block content %}<div class="page-title-row"><div><h1>Data quality dashboard</h1><p class="subtitle">Read-only checks across {{ records|length }} panels. {{ total_findings }} finding(s) require review; no data has been changed.</p></div><a class="btn" href="{{ url_for('portfolio') }}">Back to portfolio</a></div>
+<section class="table-card"><div class="table-scroll"><table class="data-table"><thead><tr><th>Panel</th><th>Findings</th><th>Details and remediation</th></tr></thead><tbody>
+{% for record in records %}<tr><td><a href="{{ url_for('panel_view',panel_id=record.panelId) }}">{{ record.panelName }}</a> ({{ record.panelId }}){% if record.archived %} — Archived{% endif %}</td><td>{{ record.findings|length }}</td><td>
+{% for finding in record.findings %}<p><strong>{{ finding.code|replace('_',' ')|title }}:</strong> {{ finding.message }} {% if finding.supplierId %}<a href="{{ url_for('supplier_edit',panel_id=record.panelId,supplier_id=finding.supplierId) }}">Review supplier</a>{% else %}<a href="{{ url_for('panel_configuration',panel_id=record.panelId) }}">Panel configuration</a>{% endif %}</p>
+{% else %}No issues detected by current checks{% endfor %}
+</td></tr>{% else %}<tr><td colspan="3">No panels available.</td></tr>{% endfor %}
+</tbody></table></div></section>{% endblock %}
