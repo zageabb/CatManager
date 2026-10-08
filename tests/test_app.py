@@ -1868,3 +1868,34 @@ def test_dev048_explicit_production_secret_guard_and_migration_ledger(tmp_path):
                         "DATABASE":secure.config["DATABASE"],"SEED_DEMO":False})
     with sqlite3.connect(secure2.config["DATABASE"]) as db:
         assert db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]==1
+
+def test_bug049_kpi_preview_works_with_csrf_enabled(tmp_path):
+    import re
+    secure=create_app({"TESTING":True, "DATABASE":str(tmp_path/"widget-csrf.sqlite"),
+                       "SEED_DEMO":False,"SECRET_KEY":"preview-test-secret","CSRF_ENABLED":True})
+    with secure.test_client() as c:
+        form=c.get("/panels/new")
+        token=re.search(rb'name="_csrf_token" value="([^"]+)"',form.data).group(1).decode()
+        create_data={"panel_id":"CMP-PREVIEW","panel_name":"Preview panel","category":"Transformers",
+                     "business":"GI","region_level":"Country","region_value":"UK",
+                     "owner":"Test","mdf_codes":["MDF-TR-001"],"lead_mdf_code":"MDF-TR-001",
+                     "fields_json":"[]","_csrf_token":token}
+        assert c.post("/panels/new",data=create_data).status_code==302
+        page=c.get("/panels/CMP-PREVIEW/configuration")
+        assert page.status_code==200
+        assert b'data-csrf-token="' in page.data
+        preview_url="/panels/CMP-PREVIEW/widgets/preview"
+        widgets={"widgets":[{"title":"Supplier Count","metric":"count","fieldId":"","format":"number","display":"panel"}]}
+        blocked=c.post(preview_url,json=widgets)
+        assert blocked.status_code==400
+        allowed=c.post(preview_url,json=widgets,headers={"X-CSRF-Token":token})
+        assert allowed.status_code==200
+        assert allowed.is_json
+        assert allowed.get_json()["widgets"][0]["title"]=="Supplier Count"
+
+
+def test_bug049_widget_js_sends_csrf_and_checks_content_type():
+    from pathlib import Path
+    source=(Path(__file__).resolve().parents[1]/"static"/"app.js").read_text()
+    assert '"X-CSRF-Token":widgetRoot.dataset.csrfToken' in source
+    assert 'contentType.includes("application/json")' in source
