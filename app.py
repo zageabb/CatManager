@@ -7,9 +7,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for, send_file
 
 from legacy_demo_data import LEGACY_DEMO_PANELS, LEGACY_MDF_CODES
+from supplier_excel import export_suppliers, preview_import, signature
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 CATEGORIES = [
     "Transformers",
@@ -1304,6 +1306,68 @@ def create_app(test_config=None):
         return render_template("panel_view.html", panel=panel,
                                dashboard_widgets=calculate_dashboard_widgets(panel["data"]["panel"]),
                                supplier_widgets=supplier_widgets, supplier_widget_rows=supplier_widget_rows)
+
+    @app.route("/panels/<panel_id>/suppliers/excel", methods=["GET", "POST"])
+    def supplier_excel_exchange(panel_id):
+        panel = get_panel_or_404(panel_id)
+        core = panel["data"]["panel"]
+        if request.method == "GET":
+            return send_file(io.BytesIO(export_suppliers(core)),
+                             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             as_attachment=True, download_name=panel_id + "-suppliers.xlsx")
+        if panel.get("archived_at"):
+            from flask import abort
+            abort(403)
+        file = request.files.get("workbook")
+        if not file or not file.filename.lower().endswith(".xlsx"):
+            flash("Select an .xlsx supplier workbook.", "error")
+            return redirect(url_for("panel_view", panel_id=panel_id))
+        try:
+            changes = preview_import(file.stream.read(5_000_001), core)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("panel_view", panel_id=panel_id))
+        token = URLSafeTimedSerializer(app.secret_key, salt="catmanager-excel-preview").dumps({
+            "panel": panel_id, "changes": changes,
+            "fieldSignature": signature(core.get("supplierFields", []))
+        })
+        return render_template("supplier_excel_preview.html", panel=panel, changes=changes, token=token)
+
+    @app.route("/panels/<panel_id>/suppliers/excel/confirm", methods=["POST"])
+    def supplier_excel_confirm(panel_id):
+        panel = get_panel_or_404(panel_id)
+        if panel.get("archived_at"):
+            from flask import abort
+            abort(403)
+        try:
+            payload = URLSafeTimedSerializer(app.secret_key, salt="catmanager-excel-preview").loads(
+                request.form.get("token", ""), max_age=1800)
+            if payload.get("panel") != panel_id:
+                raise ValueError("Workbook belongs to a different panel")
+            core = panel["data"]["panel"]
+            if payload.get("fieldSignature") != signature(core.get("supplierFields", [])):
+                raise ValueError("Panel field configuration has changed. Re-export.")
+            suppliers = {s["supplierId"]: s for s in core.get("suppliers", [])}
+            changes = payload.get("changes", [])
+            if not isinstance(changes, list):
+                raise ValueError("Invalid preview")
+            if len(set(x["supplierId"] for x in changes)) != len(changes):
+                raise ValueError("Duplicate supplier in preview")
+            # All conflicts are checked before any updates are applied.
+            for change in changes:
+                sid = change["supplierId"]
+                if sid not in suppliers or suppliers[sid].get("customFields", {}) != change["before"]:
+                    raise ValueError("Supplier data changed since preview. Re-export and retry.")
+            for change in changes:
+                suppliers[change["supplierId"]]["customFields"] = change["after"]
+            if changes:
+                append_audit(panel["data"], "supplier_excel_import", panel_id,
+                             {"changes": changes})
+                save_panel_data(panel, panel["data"])
+            flash(f"Imported updates for {len(changes)} supplier(s).", "success")
+        except (BadSignature, SignatureExpired, ValueError, KeyError, TypeError) as exc:
+            flash("Excel import was not applied: " + str(exc), "error")
+        return redirect(url_for("panel_view", panel_id=panel_id))
 
     @app.route("/panels/<panel_id>/fields/orphans")
     def orphan_fields(panel_id):
