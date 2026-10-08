@@ -161,3 +161,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [x] Configure panel-specific weighted scoring from numeric/star fields (0–5 scale), requiring positive weights and valid source fields. Display transparent per-supplier total score and missing-data status in a read-only comparison/scorecard. Save configuration with panel JSON, preserve no-score behaviour, test and pass CI before main merge.
 
   - Evidence: `supplier_scoring.py` validates unique 0–5 numeric/star criteria with positive finite weights and computes complete-case weighted averages without persisting results. Panel Configuration edits rules and panel view shows component scores/missing values. Regression tests and PR CI 37833386400 passed on commit 98fcc2049262aa294c91e6b81724f3052c8d1824.
+
+### DEV-039 — Supplier actions (in progress)
+- [ ] Add supplier-specific actions with description, owner, due date and Open/In progress/Completed status. Provide create/update workflow and list, validate inputs, preserve records in panel JSON and append audit events. Regression tests, successful CI and merge to main required.
