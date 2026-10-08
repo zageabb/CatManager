@@ -1473,20 +1473,20 @@ def create_app(test_config=None):
                     if field["type"] == "boolean":
                         value = True if value == "true" else False if value == "false" else None
                     if field["type"] == "stars" and value != "":
-                    try:
-                        rating = float(value)
-                        if not (0 <= rating <= 5 and rating * 2 == int(rating * 2)):
-                            raise ValueError()
-                        value = rating
-                    except (ValueError, OverflowError):
-                        flash(f"{field['fieldName']} must be 0–5 in steps of 0.5.", "error")
-                        return render_template("supplier_bulk_edit.html" if "supplier_id" in locals() and "fields" in locals() else "supplier_form.html", panel=panel, supplier=locals().get("previous")), 400
-                if field["type"] == "number" and value != "":
+                        try:
+                            rating = float(value)
+                            if not (0 <= rating <= 5 and rating * 2 == int(rating * 2)):
+                                raise ValueError()
+                            value = rating
+                        except (ValueError, OverflowError):
+                            flash(f"{supplier_id}: {field['fieldName']} must be 0–5 in steps of 0.5.", "error")
+                            return render_template("supplier_bulk_edit.html", panel=panel), 400
+                    if field["type"] == "number" and value != "":
                         try:
                             value = float(value)
                         except ValueError:
-                            flash(f"{supplier_id}: {field['fieldName']} must be numeric.","error")
-                            return render_template("supplier_bulk_edit.html", panel=panel),400
+                            flash(f"{supplier_id}: {field['fieldName']} must be numeric.", "error")
+                            return render_template("supplier_bulk_edit.html", panel=panel), 400
                     custom[field["fieldId"]] = value
                 if custom != before:
                     changed.append({
