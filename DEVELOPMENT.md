@@ -221,3 +221,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [ ] **UX-053** Card-based Panel Configuration hub, with existing workflows preserved and focused sections introduced incrementally.
 - [ ] **UX-054** Accessibility, CSRF/security regression, layout smoke tests, screenshots and release notes.
   - Implementation guide: [Supplier-first implementation plan](docs/SUPPLIER_FIRST_PANEL_IMPLEMENTATION.md). **These are approved plans, NOT completed development. Do not change live UI in this docs-only change.**
+
+### UX-051 implementation — in progress
+- [ ] Reorder supplier content first, add tab navigation, keep edit/configuration/add supplier and move secondary actions to grouped menu; preserve existing endpoints, tests, and CI.
