@@ -3,6 +3,7 @@ import csv
 import io
 import json
 import os
+import secrets
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,9 +67,33 @@ def create_app(test_config=None):
         SECRET_KEY=os.environ.get("CATMANAGER_SECRET_KEY", "dev-change-me"),
         DATABASE=os.environ.get("CATMANAGER_DATABASE", str(Path(app.instance_path) / "catmanager.sqlite")),
         SEED_DEMO=True,
+        CSRF_ENABLED=False,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
     )
     if test_config:
         app.config.update(test_config)
+    if not app.testing and not app.config.get("DEBUG") and app.config.get("SECRET_KEY") in (None, "", "dev-change-me"):
+        raise RuntimeError("Set a strong CATMANAGER_SECRET_KEY before production deployment.")
+
+    @app.before_request
+    def validate_csrf():
+        if not app.config.get("CSRF_ENABLED") or request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+            return None
+        supplied=request.form.get("_csrf_token") or request.headers.get("X-CSRF-Token")
+        expected=session.get("_csrf_token")
+        if not supplied or not expected or not secrets.compare_digest(str(supplied), str(expected)):
+            from flask import abort
+            abort(400)
+
+    @app.context_processor
+    def csrf_context():
+        def csrf_token():
+            if "_csrf_token" not in session:
+                session["_csrf_token"]=secrets.token_urlsafe(32)
+            return session["_csrf_token"]
+        return {"csrf_token": csrf_token}
+
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
 
     def get_db():
@@ -139,6 +164,11 @@ def create_app(test_config=None):
             updated_at TEXT NOT NULL
         );
         """)
+        db.execute("""CREATE TABLE IF NOT EXISTS schema_migrations (
+            version INTEGER PRIMARY KEY, description TEXT NOT NULL, applied_at TEXT NOT NULL
+        )""")
+        db.execute("INSERT OR IGNORE INTO schema_migrations(version,description,applied_at) VALUES(?,?,?)",
+                   (1, "Baseline CatManager schema", now_iso()))
         columns = {row[1] for row in db.execute("PRAGMA table_info(panels)").fetchall()}
         if "archived_at" not in columns:
             db.execute("ALTER TABLE panels ADD COLUMN archived_at TEXT")
