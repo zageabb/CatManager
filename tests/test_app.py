@@ -1729,3 +1729,27 @@ def test_dev044_printable_management_summary(client):
     assert b"Regional sourcing coverage" in response.data
     assert b"Outstanding supplier actions" in response.data
     assert b"Print Management Report" in client.get("/panels/CMP-PRINT").data
+
+def test_dev045_supplier_profile_joins_exact_id_across_panels(client):
+    create_panel(client, "CMP-PROFILE-A")
+    create_panel(client, "CMP-PROFILE-B")
+    create_panel(client, "CMP-PROFILE-C")
+    for pid, sid, name in [
+        ("CMP-PROFILE-A", "BP100", "Example Ltd"),
+        ("CMP-PROFILE-B", "BP100", "Example Trading"),
+        ("CMP-PROFILE-C", "BP200", "Example Ltd"),
+    ]:
+        assert client.post(f"/panels/{pid}/suppliers/new",data={
+            "supplier_id":sid,"supplier_name":name,"custom_rating":"3"
+        }).status_code==302
+    before_a=client.get("/api/panels/CMP-PROFILE-A").get_json()
+    response=client.get("/suppliers/BP100/profile")
+    assert response.status_code==200
+    page=response.get_data(as_text=True)
+    assert "Cross-panel supplier profile" in page
+    assert "CMP-PROFILE-A" in page and "CMP-PROFILE-B" in page
+    assert "CMP-PROFILE-C" not in page
+    assert "Example Trading" in page
+    assert "Profile" in client.get("/panels/CMP-PROFILE-A").get_data(as_text=True)
+    assert client.get("/api/panels/CMP-PROFILE-A").get_json()==before_a
+    assert client.get("/suppliers/UNKNOWN/profile").status_code==404
