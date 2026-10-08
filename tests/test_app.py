@@ -1837,3 +1837,34 @@ def test_dev047_master_sync_preview_confirmation_and_conflict(client):
     assert any(e["action"]=="supplier_master_synced" for e in after["metadata"]["auditTrail"])
     assert client.post("/panels/CMP-MASTER-SYNC/suppliers/master-sync/confirm",data={"token":"bad"}).status_code==302
     assert client.get("/panels/UNKNOWN/suppliers/master-sync").status_code==404
+
+def test_dev048_csrf_opt_in_blocks_untrusted_posts_and_embeds_form_tokens(tmp_path):
+    import re
+    secure=create_app({"TESTING":True,"SECRET_KEY":"secure-test-key","DATABASE":str(tmp_path/"csrf.sqlite"),
+                       "SEED_DEMO":False,"CSRF_ENABLED":True})
+    with secure.test_client() as c:
+        page=c.get("/panels/new")
+        assert page.status_code==200
+        match=re.search(rb'name="_csrf_token" value="([^"]+)"',page.data)
+        assert match
+        body={"panel_id":"CSRF-PANEL","panel_name":"Secure Test","category":"Transformers",
+              "business":"GI","region_level":"Country","region_value":"UK","owner":"A",
+              "mdf_codes":["MDF-TR-001"],"lead_mdf_code":"MDF-TR-001","fields_json":"[]"}
+        assert c.post("/panels/new",data=body).status_code==400
+        assert c.post("/panels/new",data={**body,"_csrf_token":match.group(1).decode()}).status_code==302
+
+
+def test_dev048_explicit_production_secret_guard_and_migration_ledger(tmp_path):
+    import sqlite3
+    with pytest.raises(RuntimeError,match="CATMANAGER_SECRET_KEY"):
+        create_app({"REQUIRE_STRONG_SECRET":True,"SECRET_KEY":"dev-change-me",
+                    "DATABASE":str(tmp_path/"reject.sqlite")})
+    secure=create_app({"TESTING":True,"REQUIRE_STRONG_SECRET":True,"SECRET_KEY":"real-secret-key",
+                       "DATABASE":str(tmp_path/"schema.sqlite"),"SEED_DEMO":False})
+    with sqlite3.connect(secure.config["DATABASE"]) as db:
+        rows=db.execute("SELECT version,description FROM schema_migrations").fetchall()
+        assert rows==[(1,"Baseline CatManager schema")]
+    secure2=create_app({"TESTING":True,"SECRET_KEY":"real-secret-key",
+                        "DATABASE":secure.config["DATABASE"],"SEED_DEMO":False})
+    with sqlite3.connect(secure2.config["DATABASE"]) as db:
+        assert db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]==1
