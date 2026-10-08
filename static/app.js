@@ -11,6 +11,33 @@
   function parseValue(el){if(!el)return [];try{return JSON.parse(el.value||"[]");}catch(e){return [];}}
   let fields=parseValue(hidden);
   let groups=parseValue(groupHidden);
+  const templateSelector=document.querySelector("#template-selector");
+  const addTemplateField=document.querySelector("#add-template-field");
+  let fieldTemplates=[];
+  function nextFieldId(name){
+    const base=slug(name);let id=base,n=2;
+    const ids=new Set(fields.map(function(f){return f.fieldId;}));
+    while(ids.has(id)){id=base+"_"+n;n+=1;}
+    return id;
+  }
+  async function loadFieldTemplates(){
+    if(!templateSelector)return;
+    try{
+      const response=await fetch("/api/field-templates");
+      if(!response.ok)throw new Error("Unable to load templates");
+      fieldTemplates=await response.json();
+      templateSelector.innerHTML='<option value="">Select predefined field…</option>'+
+        fieldTemplates.map(function(t){return '<option value="'+esc(t.templateId)+'">'+esc(t.fieldName)+' ('+esc(t.type)+')</option>';}).join("");
+    }catch(e){templateSelector.innerHTML='<option value="">Field library unavailable</option>';}
+  }
+  if(addTemplateField)addTemplateField.addEventListener("click",function(){
+    const t=fieldTemplates.find(function(x){return x.templateId===templateSelector.value;});
+    if(!t)return;
+    fields.push({fieldId:nextFieldId(t.fieldName),fieldName:t.fieldName,type:t.type,
+      options:(t.options||[]).slice(),required:!!t.required,groupId:""});
+    renderFields();sync();
+  });
+  loadFieldTemplates();
 
   function sync(){
     if(hidden)hidden.value=JSON.stringify(fields.map(function(f,i){f.order=i+1;return f;}));
@@ -60,7 +87,7 @@
       row.className="field-row custom";
       row.draggable=true;
       row.dataset.index=index;
-      const opts=["text","number","dropdown","date"].map(function(x){return '<option value="'+x+'" '+(f.type===x?"selected":"")+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>';}).join("");
+      const opts=["text","number","dropdown","date","boolean"].map(function(x){return '<option value="'+x+'" '+(f.type===x?"selected":"")+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>';}).join("");
       row.innerHTML=
         '<span class="drag" title="Drag to reorder">☰</span>'+
         '<input class="field-name" value="'+esc(f.fieldName||"")+'" placeholder="Field name">'+
@@ -68,6 +95,7 @@
         '<select class="field-group" aria-label="Field group">'+groupOptions(f.groupId||"")+'</select>'+
         '<input class="field-options '+(f.type==="dropdown"?"":"hidden")+'" value="'+esc((f.options||[]).join(", "))+'" placeholder="Dropdown options, comma separated">'+
         '<label class="required-toggle"><input type="checkbox" '+(f.required?"checked":"")+'> Required</label>'+
+        '<button type="button" class="btn compact save-template" title="Add to predefined library">Save to library</button>'+
         '<button type="button" class="icon-delete" aria-label="Delete">×</button>';
       row.querySelector(".field-name").addEventListener("input",function(e){
         fields[index].fieldName=e.target.value;
@@ -82,6 +110,19 @@
       row.querySelector(".field-group").addEventListener("change",function(e){fields[index].groupId=e.target.value;sync();});
       row.querySelector(".field-options").addEventListener("input",function(e){fields[index].options=e.target.value.split(",").map(function(x){return x.trim();}).filter(Boolean);sync();});
       row.querySelector(".required-toggle input").addEventListener("change",function(e){fields[index].required=e.target.checked;sync();});
+      row.querySelector(".save-template").addEventListener("click",async function(){
+        const button=this;
+        button.disabled=true;
+        try {
+          const response=await fetch("/api/field-templates",{
+            method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify(fields[index])
+          });
+          if(!response.ok){const error=await response.json();throw new Error(error.error||"Save failed");}
+          await loadFieldTemplates();
+          button.textContent="Saved";
+        }catch(error){button.textContent=error.message||"Save failed";button.disabled=false;}
+      });
       row.querySelector(".icon-delete").addEventListener("click",function(){fields.splice(index,1);renderFields();sync();});
       row.addEventListener("dragstart",function(e){e.dataTransfer.setData("text/plain",String(index));});
       row.addEventListener("dragover",function(e){e.preventDefault();});
@@ -98,6 +139,56 @@
     renderGroups();renderFields();sync();
   });
   renderGroups();renderFields();sync();
+
+
+  const widgetRoot=document.querySelector("#dashboard-widgets");
+  const widgetHidden=document.querySelector("#dashboard-widgets-json");
+  const addWidget=document.querySelector("#add-widget");
+  let widgets=parseValue(widgetHidden);
+  const widgetMetrics=["count","count_where","sum","average","minimum","maximum","distinct","ratio","percentage"];
+  const availableWidgetFields=[{fieldId:"supplierId",fieldName:"Supplier ID"},
+    {fieldId:"supplierName",fieldName:"Supplier Name"}]
+    .concat(widgetRoot ? JSON.parse(widgetRoot.dataset.fields||"[]") : []);
+  function fieldSelect(current){
+    return '<option value="">Choose field…</option>'+availableWidgetFields.map(function(f){
+      return '<option value="'+esc(f.fieldId)+'" '+(f.fieldId===current?"selected":"")+'>'+esc(f.fieldName)+'</option>';
+    }).join("");
+  }
+  function renderWidgets(){
+    if(!widgetRoot)return;
+    widgetRoot.innerHTML="";
+    widgets.forEach(function(w,i){
+      const row=document.createElement("div");
+      row.className="field-row custom widget-row";
+      row.innerHTML='<input class="widget-title" aria-label="Widget title" placeholder="KPI title" value="'+esc(w.title||"")+'">'+
+        '<select class="widget-metric" aria-label="Calculation">'+widgetMetrics.map(function(m){return '<option value="'+m+'" '+(w.metric===m?"selected":"")+'>'+m.replace("_"," ")+'</option>';}).join("")+'</select>'+
+        '<select class="widget-field" aria-label="Source field">'+fieldSelect(w.fieldId||"")+'</select>'+
+        '<select class="widget-other" aria-label="Denominator field">'+fieldSelect(w.otherFieldId||"")+'</select>'+
+        '<input class="widget-match" aria-label="Count matching value" placeholder="Equals..." value="'+esc(w.match||"")+'">'+
+        '<select class="widget-format" aria-label="Display format">'+["number","currency","percentage"].map(function(f){return '<option '+(w.format===f?"selected":"")+'>'+f+'</option>';}).join("")+'</select>'+
+        '<button class="btn compact danger widget-remove" type="button">Remove</button>';
+      [[".widget-title","title"],[".widget-metric","metric"],[".widget-field","fieldId"],
+       [".widget-other","otherFieldId"],[".widget-match","match"],[".widget-format","format"]].forEach(function(item){
+        row.querySelector(item[0]).addEventListener("change",function(e){w[item[1]]=e.target.value;syncWidgets();renderWidgets();});
+      });
+      row.querySelector(".widget-title").addEventListener("input",function(e){w.title=e.target.value;syncWidgets();});
+      row.querySelector(".widget-match").addEventListener("input",function(e){w.match=e.target.value;syncWidgets();});
+      row.querySelector(".widget-other").hidden=!["ratio","percentage"].includes(w.metric);
+      row.querySelector(".widget-match").hidden=w.metric!=="count_where";
+      row.querySelector(".widget-field").hidden=w.metric==="count";
+      row.querySelector(".widget-remove").addEventListener("click",function(){widgets.splice(i,1);renderWidgets();syncWidgets();});
+      widgetRoot.appendChild(row);
+    });
+    if(addWidget)addWidget.disabled=widgets.length>=6;
+  }
+  function syncWidgets(){if(widgetHidden)widgetHidden.value=JSON.stringify(widgets);}
+  if(addWidget)addWidget.addEventListener("click",function(){
+    if(widgets.length>=6)return;
+    widgets.push({widgetId:"widget_"+Date.now()+"_"+widgets.length,title:"New KPI",metric:"count",
+      fieldId:"",otherFieldId:"",match:"",format:"number"});
+    syncWidgets();renderWidgets();
+  });
+  renderWidgets();
 
   const mdfPicker=document.querySelector("[data-mdf-multiselect]");
   if(mdfPicker){

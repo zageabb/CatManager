@@ -25,7 +25,7 @@ CATEGORIES = [
 ]
 BUSINESSES = ["GI", "GA", "GPQSS", "HVDC"]
 REGION_LEVELS = ["Global", "Region", "HUB", "Country"]
-FIELD_TYPES = ["number", "text", "dropdown", "date"]
+FIELD_TYPES = ["number", "text", "dropdown", "date", "boolean"]
 DEFAULT_MDF_CODES = [
     {"code": "3GF", "description": "Grid equipment"},
     {"code": "MDF-TR-001", "description": "Power Transformers"},
@@ -110,6 +110,14 @@ def create_app(test_config=None):
             updated_at TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_supplier_master_name ON supplier_master(supplier_name);
+        CREATE TABLE IF NOT EXISTS field_templates (
+            template_id TEXT PRIMARY KEY,
+            field_name TEXT NOT NULL,
+            field_type TEXT NOT NULL,
+            options_json TEXT NOT NULL DEFAULT '[]',
+            required INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS app_settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL,
@@ -128,6 +136,17 @@ def create_app(test_config=None):
                    VALUES(?,?,?,?,?)
                    ON CONFLICT(code) DO UPDATE SET description=excluded.description, updated_at=excluded.updated_at""",
                 (m["code"], m["description"], 1, ts, ts),
+            )
+        # Reusable starting library; never overwrite user-customized templates.
+        for tid, name, kind, options in (
+            ("standard_mva", "Rated Power (MVA)", "number", []),
+            ("standard_voltage", "Rated Voltage (kV)", "number", []),
+            ("standard_cooling", "Cooling Type", "dropdown", ["ONAN", "ONAF", "OFAF", "ODAF"]),
+            ("standard_approved", "Approved", "boolean", []),
+        ):
+            db.execute(
+                "INSERT OR IGNORE INTO field_templates(template_id,field_name,field_type,options_json,required,updated_at) VALUES(?,?,?,?,?,?)",
+                (tid, name, kind, json.dumps(options), 0, ts),
             )
         db.commit()
         rows = db.execute("SELECT id,mdf_code,data_json FROM panels").fetchall()
@@ -148,8 +167,13 @@ def create_app(test_config=None):
                         field.setdefault("groupId", "")
                     payload["schemaVersion"] = 4
                     metadata = core.setdefault("metadata", {})
-                    metadata["version"] = max(int(metadata.get("version", 1)), 4)
+                    metadata["version"] = max(int(metadata.get("version", 1)), 5)
                     metadata.setdefault("schema4MigratedAt", ts)
+                    changed = True
+                if int(payload.get("schemaVersion", 1)) < 5:
+                    core.setdefault("dashboardWidgets", [])
+                    payload["schemaVersion"] = 5
+                    core.setdefault("metadata", {})["version"] = max(int(core["metadata"].get("version", 1)), 5)
                     changed = True
                 if changed:
                     db.execute("UPDATE panels SET data_json=? WHERE id=?", (json.dumps(payload), row["id"]))
@@ -163,10 +187,10 @@ def create_app(test_config=None):
         metadata = json.loads(json.dumps(metadata or {}))
         metadata.setdefault("createdAt", created_at or now_iso())
         metadata["updatedAt"] = now_iso()
-        metadata["version"] = max(int(metadata.get("version", 1)), 4)
+        metadata["version"] = max(int(metadata.get("version", 1)), 5)
         metadata.setdefault("auditTrail", [])
         return {
-            "schemaVersion": 4,
+            "schemaVersion": 5,
             "panel": {
                 "panelId": panel_id,
                 "panelName": panel_name,
@@ -179,6 +203,7 @@ def create_app(test_config=None):
                 "mdfCodes": list(mdf_codes),
                 "fieldGroups": field_groups,
                 "supplierFields": fields,
+                "dashboardWidgets": [],
                 "suppliers": suppliers,
                 "metadata": metadata,
             },
@@ -291,6 +316,100 @@ def create_app(test_config=None):
             clean.append({"fieldId":fid,"fieldName":name,"type":ftype,"options":[str(x).strip() for x in options if str(x).strip()],"required":bool(field.get("required",False)),"groupId":str(field.get("groupId") or "").strip(),"order":index+1})
         return clean
 
+    def parse_dashboard_widgets(raw, fields):
+        try:
+            widgets = json.loads(raw or "[]")
+        except json.JSONDecodeError as exc:
+            raise ValueError("Dashboard widgets must be valid JSON.") from exc
+        if not isinstance(widgets, list) or len(widgets) > 6:
+            raise ValueError("A panel supports up to six dashboard widgets.")
+        valid_fields = {"supplierId", "supplierName"} | {f["fieldId"] for f in fields}
+        valid_metrics = {"count", "count_where", "sum", "average", "minimum", "maximum",
+                         "distinct", "percentage", "ratio"}
+        clean = []
+        for widget in widgets:
+            if not isinstance(widget, dict):
+                raise ValueError("Invalid dashboard widget.")
+            title = str(widget.get("title", "")).strip()[:80]
+            metric = str(widget.get("metric", "")).strip()
+            field = str(widget.get("fieldId", "")).strip()
+            other = str(widget.get("otherFieldId", "")).strip()
+            if not title or metric not in valid_metrics:
+                raise ValueError("Each widget requires a title and valid calculation.")
+            if metric != "count" and field not in valid_fields:
+                raise ValueError("Widget refers to an unknown supplier field.")
+            if metric in ("ratio", "percentage") and other not in valid_fields:
+                raise ValueError("Widget denominator refers to an unknown field.")
+            clean.append({"widgetId": str(widget.get("widgetId") or uuid4().hex),
+                          "title": title, "metric": metric, "fieldId": field,
+                          "otherFieldId": other, "match": str(widget.get("match", ""))[:100],
+                          "format": widget.get("format") if widget.get("format") in ("number","currency","percentage") else "number"})
+        return clean
+
+    def calculate_dashboard_widgets(core):
+        suppliers = core.get("suppliers", [])
+        config = get_dashboard_config()
+        base_currency = config["baseCurrency"]
+        prefix = {"GBP": "£", "EUR": "€", "USD": "$"}.get(base_currency, base_currency + " ")
+        def values(field_id):
+            if field_id in ("supplierId", "supplierName"):
+                return [supplier.get(field_id) for supplier in suppliers]
+            return [supplier.get("customFields", {}).get(field_id) for supplier in suppliers]
+        def numbers(field_id):
+            out, excluded = [], 0
+            for supplier in suppliers:
+                value = supplier.get("customFields", {}).get(field_id)
+                if isinstance(value, bool) or value in (None, ""):
+                    continue
+                if field_id == config["spendFieldId"]:
+                    converted = convert_spend(value, supplier.get("customFields", {}).get(config["currencyFieldId"]), config)
+                    if converted is None:
+                        excluded += 1
+                        continue
+                    number = converted
+                else:
+                    try:
+                        number = float(value)
+                    except (TypeError, ValueError, OverflowError):
+                        excluded += 1
+                        continue
+                if number == number and abs(number) != float("inf"):
+                    out.append(number)
+                else:
+                    excluded += 1
+            return out, excluded
+        results = []
+        for widget in core.get("dashboardWidgets", [])[:6]:
+            metric = widget.get("metric")
+            fid = widget.get("fieldId", "")
+            nums, excluded = numbers(fid) if metric in ("sum","average","minimum","maximum","ratio","percentage") else ([], 0)
+            value = None
+            if metric == "count":
+                value = len(suppliers)
+            elif metric == "count_where":
+                target = widget.get("match", "").strip().lower()
+                value = sum(str(v).lower() == target for v in values(fid) if v is not None)
+            elif metric == "distinct":
+                value = len({str(v) for v in values(fid) if v is not None and v != ""})
+            elif metric == "sum":
+                value = sum(nums)
+            elif metric == "average":
+                value = sum(nums)/len(nums) if nums else None
+            elif metric == "minimum":
+                value = min(nums) if nums else None
+            elif metric == "maximum":
+                value = max(nums) if nums else None
+            elif metric in ("ratio", "percentage"):
+                denominator_values, denominator_excluded = numbers(widget.get("otherFieldId", ""))
+                excluded += denominator_excluded
+                denominator = sum(denominator_values)
+                if denominator:
+                    value = sum(nums)/denominator * (100 if metric == "percentage" else 1)
+            results.append({"title": widget.get("title", "Widget"), "value": value,
+                            "metric": metric, "format": widget.get("format", "number"),
+                            "currencyPrefix": prefix, "excluded": excluded})
+        return results
+
     def parse_field_groups(raw):
         try:
             groups = json.loads(raw or "[]")
@@ -315,7 +434,7 @@ def create_app(test_config=None):
             raise ValueError("JSON must contain a panel object.")
         data = json.loads(json.dumps(payload))
         version = int(data.get("schemaVersion", 1))
-        if version > 4:
+        if version > 5:
             raise ValueError(f"Unsupported schemaVersion {version}.")
         core = data["panel"]
         metadata = core.setdefault("metadata", {})
@@ -331,8 +450,10 @@ def create_app(test_config=None):
             core.setdefault("fieldGroups", [])
             for field in core.get("supplierFields", []):
                 field.setdefault("groupId", "")
-        data["schemaVersion"] = 4
-        metadata["version"] = max(int(metadata.get("version", 1)), 4)
+        if version < 5:
+            core.setdefault("dashboardWidgets", [])
+        data["schemaVersion"] = 5
+        metadata["version"] = max(int(metadata.get("version", 1)), 5)
         required = ["panelId","panelName","category","business","region","panelOwner","fieldGroups","supplierFields","suppliers","leadMdfCode","mdfCodes"]
         if not all(k in core for k in required):
             missing = [k for k in required if k not in core]
@@ -352,6 +473,7 @@ def create_app(test_config=None):
                         field["groupId"] = ""
             else:
                 raise ValueError("Custom fields reference unknown field groups: " + ", ".join(unknown_groups))
+        core["dashboardWidgets"] = parse_dashboard_widgets(json.dumps(core.get("dashboardWidgets", [])), core["supplierFields"])
         if not isinstance(core.get("suppliers"), list):
             raise ValueError("suppliers must be a list.")
         return data
@@ -798,11 +920,48 @@ def create_app(test_config=None):
         response.headers["Content-Disposition"] = f'attachment; filename="{panel_id}.json"'
         return response
 
+    @app.route("/api/field-templates", methods=["GET", "POST"])
+    def field_templates():
+        db = get_db()
+        if request.method == "GET":
+            rows = db.execute("SELECT * FROM field_templates ORDER BY field_name COLLATE NOCASE").fetchall()
+            return jsonify([{
+                "templateId": row["template_id"], "fieldName": row["field_name"],
+                "type": row["field_type"], "options": json.loads(row["options_json"]),
+                "required": bool(row["required"]),
+            } for row in rows])
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return jsonify({"error": "Expected field JSON object."}), 400
+        try:
+            fields = parse_fields(json.dumps([body]))
+        except (TypeError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+        field = fields[0]
+        tid = uuid4().hex
+        db.execute("INSERT INTO field_templates(template_id,field_name,field_type,options_json,required,updated_at) VALUES(?,?,?,?,?,?)",
+                   (tid, field["fieldName"], field["type"], json.dumps(field["options"]), int(field["required"]), now_iso()))
+        db.commit()
+        return jsonify({"templateId": tid, "fieldName": field["fieldName"],
+                        "type": field["type"], "options": field["options"],
+                        "required": field["required"]}), 201
+
     @app.route("/panels/new", methods=["GET","POST"])
     def panel_new():
         if request.method == "POST":
             return save_panel()
         return render_template("panel_form.html",panel=None)
+
+    @app.route("/panels/<panel_id>/duplicate", methods=["GET", "POST"])
+    def panel_duplicate(panel_id):
+        source = get_panel_or_404(panel_id)
+        if request.method == "POST":
+            return save_panel(source=source)
+        prefill = dict(source)
+        prefill["panel_id"] = ""
+        prefill["panel_name"] = "Copy of " + source["panel_name"]
+        return render_template("panel_form.html", panel=None, prefill=prefill,
+                               duplicate_source=source)
 
     @app.route("/panels/<panel_id>/edit", methods=["GET","POST"])
     def panel_edit(panel_id):
@@ -818,7 +977,7 @@ def create_app(test_config=None):
             return save_panel_configuration(panel)
         return render_template("panel_configuration.html", panel=panel)
 
-    def save_panel(existing=None):
+    def save_panel(existing=None, source=None):
         panel_id = request.form.get("panel_id","").strip()
         panel_name = request.form.get("panel_name","").strip()
         category = request.form.get("category","")
@@ -836,7 +995,7 @@ def create_app(test_config=None):
             return render_template("panel_form.html",panel=existing),400
         active_mdf = {m["code"] for m in get_mdf_codes()}
         existing_mdf = set(existing["data"]["panel"].get("mdfCodes", [existing.get("mdf_code")]) if existing else [])
-        allowed_mdf = active_mdf | existing_mdf
+        allowed_mdf = active_mdf | existing_mdf | set(source["data"]["panel"].get("mdfCodes", []) if source else [])
         if any(code not in allowed_mdf for code in mdf_codes) or lead_mdf_code not in mdf_codes:
             flash("Select one or more valid MDF codes and choose the lead MDF from those selected.","error")
             return render_template("panel_form.html",panel=existing),400
@@ -847,9 +1006,9 @@ def create_app(test_config=None):
         value = region_value or region_level
         existing_metadata = json.loads(json.dumps(existing["data"]["panel"].get("metadata", {}))) if existing else None
 
-        if existing:
-            field_groups = json.loads(json.dumps(existing["data"]["panel"].get("fieldGroups", [])))
-            fields = json.loads(json.dumps(existing["data"]["panel"].get("supplierFields", [])))
+        if existing or source:
+            field_groups = json.loads(json.dumps((existing or source)["data"]["panel"].get("fieldGroups", [])))
+            fields = json.loads(json.dumps((existing or source)["data"]["panel"].get("supplierFields", [])))
         else:
             try:
                 field_groups = parse_field_groups(request.form.get("field_groups_json","[]"))
@@ -863,12 +1022,23 @@ def create_app(test_config=None):
                 return render_template("panel_form.html",panel=existing),400
 
         payload = build_panel_payload(panel_id,panel_name,category,business,region_level,value,owner,mdf_codes,lead_mdf_code,field_groups,fields,suppliers,created_at,existing_metadata)
+        if existing and "dashboardWidgets" in existing["data"]["panel"]:
+            payload["panel"]["dashboardWidgets"] = json.loads(json.dumps(existing["data"]["panel"]["dashboardWidgets"]))
+        if source:
+            # A duplicate is a fresh aggregate: no supplier records, history or orphaned values.
+            # Carry over optional panel configuration such as future KPI widget definitions.
+            source_core = source["data"]["panel"]
+            for key in ("dashboardWidgets",):
+                if key in source_core:
+                    payload["panel"][key] = json.loads(json.dumps(source_core[key]))
+            payload["panel"]["suppliers"] = []
         if existing:
             changes = panel_change_summary(existing["data"], payload)
             if changes:
                 append_audit(payload, "panel_updated", panel_id, {"changes": changes})
         else:
-            append_audit(payload, "panel_created", panel_id, {
+            append_audit(payload, "panel_duplicated" if source else "panel_created", panel_id, {
+                **({"sourcePanelId": source["panel_id"]} if source else {}),
                 "panelName": panel_name,
                 "category": category,
                 "business": business,
@@ -899,6 +1069,7 @@ def create_app(test_config=None):
             field_groups = parse_field_groups(request.form.get("field_groups_json","[]"))
             fields = parse_fields(request.form.get("fields_json","[]"))
             group_ids = {g["groupId"] for g in field_groups}
+            widgets = parse_dashboard_widgets(request.form.get("dashboard_widgets_json", json.dumps(core.get("dashboardWidgets", []))), fields)
             unknown_groups = sorted({f["groupId"] for f in fields if f.get("groupId") and f["groupId"] not in group_ids})
             if unknown_groups:
                 raise ValueError("Custom fields reference unknown field groups: " + ", ".join(unknown_groups))
@@ -956,6 +1127,7 @@ def create_app(test_config=None):
         before = json.loads(json.dumps(panel["data"]))
         core["fieldGroups"] = field_groups
         core["supplierFields"] = fields
+        core["dashboardWidgets"] = widgets
         changes = panel_change_summary(before, data)
         if changes:
             append_audit(data, "panel_configuration_updated", panel["panel_id"], {"changes": changes})
@@ -977,9 +1149,9 @@ def create_app(test_config=None):
         return None
 
     def append_audit(data, action, entity_id, details=None):
-        data["schemaVersion"] = max(int(data.get("schemaVersion", 1)), 4)
+        data["schemaVersion"] = max(int(data.get("schemaVersion", 1)), 5)
         metadata = data["panel"].setdefault("metadata", {})
-        metadata["version"] = max(int(metadata.get("version", 1)), 4)
+        metadata["version"] = max(int(metadata.get("version", 1)), 5)
         metadata["updatedAt"] = now_iso()
         trail = metadata.setdefault("auditTrail", [])
         trail.append({
@@ -1012,6 +1184,10 @@ def create_app(test_config=None):
                     "before": before_core.get(key),
                     "after": after_core.get(key),
                 }
+        if before_core.get("dashboardWidgets", []) != after_core.get("dashboardWidgets", []):
+            changes["dashboardWidgets"] = {"label": "Dashboard widgets",
+                                            "before": before_core.get("dashboardWidgets", []),
+                                            "after": after_core.get("dashboardWidgets", [])}
         if before_core.get("fieldGroups", []) != after_core.get("fieldGroups", []):
             changes["fieldGroups"] = {
                 "label": "Field groups",
@@ -1048,7 +1224,9 @@ def create_app(test_config=None):
 
     @app.route("/panels/<panel_id>")
     def panel_view(panel_id):
-        return render_template("panel_view.html",panel=get_panel_or_404(panel_id))
+        panel = get_panel_or_404(panel_id)
+        return render_template("panel_view.html", panel=panel,
+                               dashboard_widgets=calculate_dashboard_widgets(panel["data"]["panel"]))
 
     @app.route("/panels/<panel_id>/fields/orphans")
     def orphan_fields(panel_id):
@@ -1152,6 +1330,8 @@ def create_app(test_config=None):
             custom = {}
             for field in data["panel"].get("supplierFields",[]):
                 value = request.form.get(f"custom_{field['fieldId']}","")
+                if field["type"] == "boolean":
+                    value = True if value == "true" else False if value == "false" else None
                 if field["type"] == "number" and value != "":
                     try: value = float(value)
                     except ValueError:
@@ -1185,6 +1365,8 @@ def create_app(test_config=None):
             custom = supplier.setdefault("customFields", {})
             for field in data["panel"].get("supplierFields",[]):
                 value = request.form.get(f"custom_{field['fieldId']}","")
+                if field["type"] == "boolean":
+                    value = True if value == "true" else False if value == "false" else None
                 if field["type"] == "number" and value != "":
                     try:
                         value = float(value)
@@ -1213,6 +1395,8 @@ def create_app(test_config=None):
                 for field in fields:
                     key = f"{supplier_id}__{field['fieldId']}"
                     value = request.form.get(key, "")
+                    if field["type"] == "boolean":
+                        value = True if value == "true" else False if value == "false" else None
                     if field["type"] == "number" and value != "":
                         try:
                             value = float(value)

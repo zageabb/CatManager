@@ -88,7 +88,7 @@ def test_custom_field_groups_render_on_supplier_and_bulk_forms(client):
     })
     assert response.status_code==302
     body=client.get("/api/panels/CMP-GROUP").get_json()
-    assert body["schemaVersion"]==4
+    assert body["schemaVersion"]==5
     assert [g["name"] for g in body["panel"]["fieldGroups"]]==["Risk & Qualification","Performance"]
     assert body["panel"]["supplierFields"][0]["groupId"]=="risk_qualification"
     assert body["panel"]["supplierFields"][2]["groupId"]==""
@@ -138,7 +138,7 @@ def test_existing_schema3_panel_migrates_without_losing_supplier_values(app):
         "SECRET_KEY":"test",
     })
     migrated=migrated_app.test_client().get("/api/panels/CMP-OLD").get_json()
-    assert migrated["schemaVersion"]==4
+    assert migrated["schemaVersion"]==5
     assert migrated["panel"]["fieldGroups"]==[]
     assert migrated["panel"]["supplierFields"][0]["groupId"]==""
     assert migrated["panel"]["suppliers"][0]["customFields"]["rating"]==275.0
@@ -647,16 +647,16 @@ def test_panel_import_migrates_v1_and_export_returns_current_schema(client):
     )
     assert response.status_code==302
     body=client.get("/api/panels/CMP6000").get_json()
-    assert body["schemaVersion"]==4
+    assert body["schemaVersion"]==5
     assert body["panel"]["leadMdfCode"]=="MDF-TR-001"
     assert body["panel"]["mdfCodes"]==["MDF-TR-001"]
-    assert body["panel"]["metadata"]["version"]==4
+    assert body["panel"]["metadata"]["version"]==5
     exported=client.get("/panels/CMP6000/export")
     assert exported.status_code==200
     assert exported.mimetype=="application/json"
     assert 'attachment; filename="CMP6000.json"' in exported.headers["Content-Disposition"]
     exported_body=json.loads(exported.data)
-    assert exported_body["schemaVersion"]==4
+    assert exported_body["schemaVersion"]==5
 
 def test_panel_import_requires_replace_for_existing_panel(client):
     create_panel(client)
@@ -908,3 +908,175 @@ def test_settings_hub_is_accessible_from_header(client):
     assert b"Supplier master" in settings.data
     assert b"MDF master data" in settings.data
     assert b"Panel import" in settings.data
+
+def test_duplicate_panel_preserves_configuration_but_not_suppliers_or_history(client):
+    create_panel(client, "CMP-SOURCE")
+    client.post("/panels/CMP-SOURCE/suppliers/new", data={
+        "supplier_id": "SUP-DUP", "supplier_name": "Supplier to exclude",
+        "address": "Test", "post_code": "", "custom_rating": "200",
+    })
+    source = client.get("/api/panels/CMP-SOURCE").get_json()["panel"]
+    assert len(source["suppliers"]) == 1
+    client.post("/panels/CMP-SOURCE/configuration", data={
+        "field_groups_json": "[]",
+        "fields_json": json.dumps(source["supplierFields"]),
+        "dashboard_widgets_json": json.dumps([{"title": "Supplier Count", "metric": "count"}]),
+    })
+    source = client.get("/api/panels/CMP-SOURCE").get_json()["panel"]
+    response = client.get("/panels/CMP-SOURCE/duplicate")
+    assert response.status_code == 200
+    assert b"Copy of Test Transformers" in response.data
+    assert b"Duplicate Panel" in client.get("/panels/CMP-SOURCE").data
+
+    response = client.post("/panels/CMP-SOURCE/duplicate", data={
+        "panel_id": "CMP-COPY", "panel_name": "Independent copy",
+        "category": "Transformers", "business": "GI", "region_level": "Country",
+        "region_value": "United Kingdom", "owner": "Test Owner",
+        "mdf_codes": ["MDF-TR-001"], "lead_mdf_code": "MDF-TR-001",
+    })
+    assert response.status_code == 302
+    duplicate = client.get("/api/panels/CMP-COPY").get_json()["panel"]
+    assert duplicate["suppliers"] == []
+    assert duplicate["supplierFields"] == source["supplierFields"]
+    assert duplicate["fieldGroups"] == source["fieldGroups"]
+    assert duplicate["mdfCodes"] == source["mdfCodes"]
+    assert duplicate["dashboardWidgets"] == source["dashboardWidgets"]
+    assert len(duplicate["metadata"]["auditTrail"]) == 1
+    assert duplicate["metadata"]["auditTrail"][0]["action"] == "panel_duplicated"
+    assert duplicate["metadata"]["auditTrail"][0]["details"]["sourcePanelId"] == "CMP-SOURCE"
+    assert len(client.get("/api/panels/CMP-SOURCE").get_json()["panel"]["suppliers"]) == 1
+    assert client.post("/panels/CMP-SOURCE/duplicate", data={
+        "panel_id": "CMP-COPY", "panel_name": "Duplicate", "category": "Transformers",
+        "business": "GI", "region_level": "Country", "owner": "Test Owner",
+        "mdf_codes": ["MDF-TR-001"], "lead_mdf_code": "MDF-TR-001",
+    }).status_code == 409
+
+def test_field_template_library_creates_independent_field_definitions(client):
+    create_panel(client, "CMP-LIB")
+    template = {"fieldName": "Cooling Type", "type": "dropdown",
+                "options": ["ONAN", "ONAF"], "required": False}
+    response = client.post("/api/field-templates", json=template)
+    assert response.status_code == 201
+    template_id = response.get_json()["templateId"]
+    library = client.get("/api/field-templates").get_json()
+    assert any(item["templateId"] == template_id for item in library)
+    assert b"Select predefined field" in client.get("/panels/CMP-LIB/configuration").data
+    assert client.post("/api/field-templates", json={"fieldName": "", "type": "number"}).status_code == 400
+
+    fields = [{"fieldId": "cooling_copy", **template, "groupId": ""}]
+    response = client.post("/panels/CMP-LIB/configuration", data={
+        "field_groups_json": "[]", "fields_json": json.dumps(fields),
+    })
+    assert response.status_code == 302
+    panel_field = client.get("/api/panels/CMP-LIB").get_json()["panel"]["supplierFields"][0]
+    assert panel_field["fieldId"] == "cooling_copy"
+    assert panel_field["options"] == ["ONAN", "ONAF"]
+    # Updating a panel's field never modifies its central reusable template.
+    fields[0]["options"].append("OFAF")
+    client.post("/panels/CMP-LIB/configuration", data={
+        "field_groups_json": "[]", "fields_json": json.dumps(fields),
+    })
+    assert next(item for item in client.get("/api/field-templates").get_json() if item["templateId"] == template_id)["options"] == ["ONAN", "ONAF"]
+
+def test_boolean_field_tristate_in_supplier_and_bulk_editor(client):
+    create_panel(client, "CMP-BOOL")
+    client.post("/panels/CMP-BOOL/configuration", data={
+        "field_groups_json": "[]",
+        "fields_json": json.dumps([{
+            "fieldId": "approved", "fieldName": "Approved", "type": "boolean",
+            "required": False, "options": []
+        }])
+    })
+    form = client.get("/panels/CMP-BOOL/suppliers/new")
+    assert b'option value="true"' in form.data
+    client.post("/panels/CMP-BOOL/suppliers/new", data={
+        "supplier_id": "SUP-B", "supplier_name": "Test Boolean",
+        "custom_approved": "true"
+    })
+    body = client.get("/api/panels/CMP-BOOL").get_json()
+    assert body["panel"]["suppliers"][0]["customFields"]["approved"] is True
+    assert b"boolean-yes" in client.get("/panels/CMP-BOOL").data
+    client.post("/panels/CMP-BOOL/suppliers/bulk-edit", data={
+        "SUP-B__approved": "false"
+    })
+    assert client.get("/api/panels/CMP-BOOL").get_json()["panel"]["suppliers"][0]["customFields"]["approved"] is False
+    assert b"boolean-no" in client.get("/panels/CMP-BOOL").data
+    client.post("/panels/CMP-BOOL/suppliers/SUP-B/edit", data={
+        "supplier_name": "Test Boolean", "custom_approved": ""
+    })
+    assert client.get("/api/panels/CMP-BOOL").get_json()["panel"]["suppliers"][0]["customFields"]["approved"] is None
+    assert b"boolean-unset" in client.get("/panels/CMP-BOOL").data
+
+def test_configurable_supplier_kpi_widgets_and_safe_zero_division(client):
+    create_panel(client, "CMP-KPI")
+    fields = [
+        {"fieldId": "mva", "fieldName": "MVA", "type": "number", "options": []},
+        {"fieldId": "spend", "fieldName": "Spend", "type": "number", "options": []},
+    ]
+    widgets = [
+        {"title": "Suppliers", "metric": "count"},
+        {"title": "MVA", "metric": "sum", "fieldId": "mva"},
+        {"title": "Total spend", "metric": "sum", "fieldId": "spend"},
+        {"title": "Spend per MVA", "metric": "ratio",
+         "fieldId": "spend", "otherFieldId": "mva"},
+        {"title": "Average spend", "metric": "average", "fieldId": "spend"},
+    ]
+    saved = client.post("/panels/CMP-KPI/configuration", data={
+        "fields_json": json.dumps(fields), "field_groups_json": "[]",
+        "dashboard_widgets_json": json.dumps(widgets),
+    })
+    assert saved.status_code == 302
+    client.post("/panels/CMP-KPI/suppliers/new", data={
+        "supplier_id": "S1", "supplier_name": "One", "custom_mva": "100", "custom_spend": "500"
+    })
+    client.post("/panels/CMP-KPI/suppliers/new", data={
+        "supplier_id": "S2", "supplier_name": "Two", "custom_mva": "200", "custom_spend": "900"
+    })
+    page = client.get("/panels/CMP-KPI")
+    assert page.status_code == 200
+    assert b"Spend per MVA" in page.data
+    assert b"1,400.00" in page.data
+    assert b"300.00" in page.data
+    assert b"4.67" in page.data  # sum(spend)/sum(mva)
+    assert b"700.00" in page.data
+    saved_widgets = client.get("/api/panels/CMP-KPI").get_json()["panel"]["dashboardWidgets"]
+    assert len(saved_widgets) == 5
+
+    # Bad definitions rejected, and prior configuration preserved.
+    failure = client.post("/panels/CMP-KPI/configuration", data={
+        "fields_json": json.dumps(fields), "field_groups_json": "[]",
+        "dashboard_widgets_json": json.dumps([{"title": f"W{i}", "metric": "count"} for i in range(7)]),
+    })
+    assert failure.status_code == 400
+    assert len(client.get("/api/panels/CMP-KPI").get_json()["panel"]["dashboardWidgets"]) == 5
+    client.post("/panels/CMP-KPI/configuration", data={
+        "fields_json": json.dumps(fields), "field_groups_json": "[]",
+        "dashboard_widgets_json": json.dumps([{
+            "title": "Zero denominator", "metric": "ratio",
+            "fieldId": "mva", "otherFieldId": "spend"
+        }]),
+    })
+    assert client.get("/panels/CMP-KPI").status_code == 200
+
+def test_currency_aware_kpi_sum_uses_base_currency_rates(client):
+    create_panel(client, "CMP-FX")
+    fields = [
+        {"fieldId":"annual_spend","fieldName":"Spend","type":"number"},
+        {"fieldId":"spend_currency","fieldName":"Currency","type":"dropdown",
+         "options":["GBP","EUR"]},
+    ]
+    client.post("/panels/CMP-FX/configuration", data={
+        "field_groups_json":"[]", "fields_json":json.dumps(fields),
+        "dashboard_widgets_json":json.dumps([
+            {"title":"Total spend","metric":"sum",
+             "fieldId":"annual_spend","format":"currency"}
+        ]),
+    })
+    for sid, currency in (("S1","GBP"),("S2","EUR")):
+        client.post("/panels/CMP-FX/suppliers/new", data={
+            "supplier_id":sid,"supplier_name":sid,
+            "custom_annual_spend":"100","custom_spend_currency":currency,
+        })
+    response=client.get("/panels/CMP-FX")
+    assert response.status_code==200
+    assert "£186.00" in response.get_data(as_text=True)

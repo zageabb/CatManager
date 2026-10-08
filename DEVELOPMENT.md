@@ -63,3 +63,20 @@ An item is complete only when the source is present, relevant tests pass, and CI
 
 - [x] DEV-023 Separate panel metadata editing from panel configuration.
   - Evidence: Edit Panel now contains only core panel metadata (Panel ID/name, category, business, region, owner and MDF selections); custom supplier fields and field groups are managed on the dedicated /panels/<id>/configuration Panel Configuration page; panel detail exposes both actions separately; metadata edits preserve the existing field schema; configuration changes retain field-removal impact preview, orphan preservation/restoration semantics and dedicated audit events; behavioural tests verify the separation and existing custom-field workflows. CI run 37608778960 passed on commit 5c99d58ba76a651a923270f681be632bd41b5ba9.
+
+## V3 — Panel reuse and supplier reporting (baseline tag: Version_2_Demo)
+- [x] DEV-024 Duplicate panel configuration into a newly named/identified panel. Copy metadata, MDF selection, field groups and field definitions (and future widget definitions) but **never** supplier rows, archived state, orphaned supplier data or audit history. Validate uniqueness and keep source unchanged. Add behavioural tests.
+  - Evidence: new duplicate route, prefilled create form, independent JSON aggregate with no supplier or audit copy, regression tests; PR CI run 37766497820 succeeded on efcd74f5539004c01ec0e83785b986f05cef10ef.
+- [x] DEV-025 Reusable SQLite-managed custom-field template library. Selecting a template creates a new independent field ID and copies name, type and options; allow saving a panel field as a template.
+- [x] DEV-026 Boolean supplier field with separate true/false/unset state, checkbox or Yes/No editing and accessible colour block in read-only tables. Preserve existing data and migration compatibility.
+- [x] DEV-027 Up to six panel-specific KPI cards with count, conditional count, sum, average, min, max, distinct count, percent and bounded arithmetic on aggregations; configurable formats, safe zero division and currency handling. Expose configuration under Panel Configuration and preserve definitions on panel duplicate/import/export.
+
+## V3 execution rule
+Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update this file before each development stage, add regression tests and record verification evidence only after tests and commit-specific CI pass.
+
+## V3 implementation notes
+- DEV-025: `field_templates` SQLite table, seeded electrical equipment field examples, /api/field-templates GET/POST, add-from-template and save-to-library buttons in Panel Configuration. Each insertion creates a new independent field ID (no shared binding), with field type and dropdown options copied. Regression test verifies isolation.
+- DEV-026: `boolean` joins allowed custom field types; supplier edit and bulk edit accept true/false/unassessed values; normal view shows text-labelled green/red/grey blocks. Reversible values preserved as JSON booleans/null. Regression test verifies all three states.
+- DEV-027: `dashboardWidgets` definitions in canonical panel JSON (up to six), editable from Panel Configuration; count, conditional count, distinct, sum, average, min, max, ratio and percentage supported with safe zero-division. Aggregations update on supplier edits, currency-aware sums use existing Spend/currency dashboard mappings, and invalid/unconverted values are surfaced. Duplication preserves widgets without data. Regression tests verify calculations, six-widget limit, currency conversion and duplication.
+- Schema v5 migration adds `dashboardWidgets: []` to older panels without changing supplier values, accepts older JSON imports and validates widget definitions; `metadata.version` is synchronized with v5. V2 demo remains frozen at `Version_2_Demo`.
+- Validation rule: mark completion evidence authoritative only after CI passes for the final commit; CI run URL and SHA should be recorded before merging.

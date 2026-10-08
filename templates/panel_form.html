@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Edit' if panel else 'Create' }} panel{% endblock %}
+{% block title %}{{ 'Edit' if panel else ('Duplicate' if duplicate_source else 'Create') }} panel{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('portfolio') }}">Category panel</a><span>›</span><span>{{ 'Edit panel' if panel else 'Create panel' }}</span>{% endblock %}
 {% block content %}<div class="page-title-row"><div><h1>{{ 'Edit panel' if panel else 'Create panel' }}</h1><p class="subtitle">Define the core panel details. Custom supplier fields are managed separately in Panel Configuration.</p></div></div>
-<form method="post" class="form-card" id="panel-form">{% set p = panel if panel else {} %}<h2>Panel details</h2><div class="form-grid">
+<form method="post" class="form-card" id="panel-form">{% set p = panel if panel else (prefill|default({}, true)) %}<h2>Panel details</h2><div class="form-grid">
 <label>Panel ID *<input name="panel_id" required value="{{ p.get('panel_id','') }}" {{ 'readonly' if panel }} placeholder="CMP0001"></label>
 <label>Panel Name *<input name="panel_name" required value="{{ p.get('panel_name','') }}"></label>
 <label>Category *<select name="category" required>{% for x in categories %}<option {{ 'selected' if p.get('category')==x }}>{{ x }}</option>{% endfor %}</select></label>
@@ -10,7 +10,7 @@
 <label>Region level *<select name="region_level" required>{% for x in region_levels %}<option {{ 'selected' if p.get('region_level')==x }}>{{ x }}</option>{% endfor %}</select></label>
 <label>Region value<input name="region_value" value="{{ p.get('region_value','') }}" placeholder="e.g. Europe / UK / Global"></label>
 <label>Panel Owner *<input name="owner" required value="{{ p.get('owner','') }}"></label>
-{% set selected_mdfs = p.data.panel.mdfCodes if panel and p.data.panel.mdfCodes is defined else ([p.get('mdf_code')] if p.get('mdf_code') else []) %}
+{% set selected_mdfs = p.data.panel.mdfCodes if p.get('data') and p.data.panel.mdfCodes is defined else ([p.get('mdf_code')] if p.get('mdf_code') else []) %}
 <div class="mdf-selector-block" data-mdf-multiselect>
   <span class="field-label">MDF Codes *</span>
   <button class="mdf-select-trigger" type="button" aria-expanded="false">
@@ -36,9 +36,9 @@
   <small class="help-text">Choose one or more MDFs. Use the search box to filter the list.</small>
 </div>
 <label>Lead MDF *
-  <select name="lead_mdf_code" id="lead-mdf-select" required data-current="{{ p.data.panel.get('leadMdfCode', p.get('mdf_code')) if panel else '' }}">
+  <select name="lead_mdf_code" id="lead-mdf-select" required data-current="{{ p.data.panel.get('leadMdfCode', p.get('mdf_code')) if p.get('data') else '' }}">
     <option value="">Select lead MDF…</option>
   </select>
   <small class="help-text">Only MDFs selected above are available as the lead MDF.</small>
 </label>
-</div><div class="form-actions"><a class="btn" href="{{ url_for('panel_view', panel_id=panel.panel_id) if panel else url_for('portfolio') }}">Cancel</a><button class="btn primary" type="submit">{{ 'Save Panel' if panel else 'Create Panel' }}</button></div></form>{% endblock %}
+</div>{% if duplicate_source %}<p class="help-text">This creates an independent panel with the same field configuration and MDFs, but no supplier records or audit history. Choose a new Panel ID.</p>{% endif %}<div class="form-actions"><a class="btn" href="{{ url_for('panel_view', panel_id=panel.panel_id) if panel else url_for('portfolio') }}">Cancel</a><button class="btn primary" type="submit">{{ 'Save Panel' if panel else ('Duplicate Panel' if duplicate_source else 'Create Panel') }}</button></div></form>{% endblock %}

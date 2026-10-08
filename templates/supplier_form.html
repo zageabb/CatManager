@@ -4,7 +4,9 @@
 {% macro custom_field(f) %}
   {% set current = supplier.customFields.get(f.fieldId,'') if supplier else '' %}
   <label>{{ f.fieldName }}{{ ' *' if f.required }}
-  {% if f.type=='dropdown' %}
+  {% if f.type=='boolean' %}
+    <select name="custom_{{ f.fieldId }}" {{ 'required' if f.required }}><option value="" {{ 'selected' if current is none or current=='' }}>Not assessed</option><option value="true" {{ 'selected' if current is sameas true }}>Yes</option><option value="false" {{ 'selected' if current is sameas false }}>No</option></select>
+  {% elif f.type=='dropdown' %}
     <select name="custom_{{ f.fieldId }}" {{ 'required' if f.required }}><option value="">Select…</option>{% for o in f.options %}<option {{ 'selected' if current==o }}>{{ o }}</option>{% endfor %}</select>
   {% else %}
     <input name="custom_{{ f.fieldId }}" value="{{ current }}" type="{{ 'number' if f.type=='number' else 'date' if f.type=='date' else 'text' }}" step="any" {{ 'required' if f.required }}>
