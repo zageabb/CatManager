@@ -1486,3 +1486,60 @@ def test_dev038_panel_scoring_saved_and_displayed(client):
     })
     assert invalid.status_code==400
     assert client.get("/api/panels/CMP-SCORE").get_json()["panel"]["scoringCriteria"]==core["scoringCriteria"]
+
+def test_dev039_supplier_actions_create_update_audit_and_validation(client):
+    create_panel(client, "CMP-ACTIONS")
+    assert client.post("/panels/CMP-ACTIONS/suppliers/new", data={
+        "supplier_id": "SUP-A", "supplier_name": "Action Supplier"
+    }).status_code == 302
+    url = "/panels/CMP-ACTIONS/suppliers/SUP-A/actions"
+    assert b"No actions recorded." in client.get(url).data
+    created = client.post(url, data={
+        "title": "Obtain quality certificate", "owner": "Category Manager",
+        "due_date": "2026-12-15", "status": "Open"
+    })
+    assert created.status_code == 302
+    core = client.get("/api/panels/CMP-ACTIONS").get_json()["panel"]
+    action = core["suppliers"][0]["actions"][0]
+    assert action["title"] == "Obtain quality certificate"
+    assert action["owner"] == "Category Manager"
+    assert action["dueDate"] == "2026-12-15"
+    assert action["status"] == "Open"
+    assert b"Actions (1)" in client.get("/panels/CMP-ACTIONS").data
+    assert b"Obtain quality certificate" in client.get(url).data
+    updated = client.post(url, data={
+        "action_id": action["actionId"], "title": "Certificate received",
+        "owner": "Quality Lead", "due_date": "2026-12-15",
+        "status": "Completed"
+    })
+    assert updated.status_code == 302
+    core = client.get("/api/panels/CMP-ACTIONS").get_json()["panel"]
+    actions = core["suppliers"][0]["actions"]
+    assert len(actions) == 1
+    assert actions[0]["status"] == "Completed"
+    assert actions[0]["title"] == "Certificate received"
+    events = [event["action"] for event in core["metadata"]["auditTrail"]]
+    assert "supplier_action_created" in events
+    assert "supplier_action_updated" in events
+    bad = client.post(url, data={
+        "title": "Invalid", "owner": "Test", "due_date": "2026-13-75", "status": "Open"
+    })
+    assert bad.status_code == 400
+    assert len(client.get("/api/panels/CMP-ACTIONS").get_json()["panel"]["suppliers"][0]["actions"]) == 1
+    assert client.post(url, data={
+        "action_id": "unknown", "title": "Nope", "owner": "Test",
+        "status": "Open"
+    }).status_code == 404
+    assert client.get("/panels/CMP-ACTIONS/suppliers/missing/actions").status_code == 404
+
+
+def test_dev039_supplier_action_rejects_unsafe_status_and_empty_owner(client):
+    create_panel(client, "CMP-ACT-ERR")
+    client.post("/panels/CMP-ACT-ERR/suppliers/new", data={
+        "supplier_id": "S1", "supplier_name": "Supplier"
+    })
+    url = "/panels/CMP-ACT-ERR/suppliers/S1/actions"
+    for changes in ({"title": "Task", "owner": "", "status": "Open"},
+                    {"title": "Task", "owner": "Lead", "status": "Escalated"}):
+        assert client.post(url, data=changes).status_code == 400
+    assert client.get("/api/panels/CMP-ACT-ERR").get_json()["panel"]["suppliers"][0].get("actions", []) == []
