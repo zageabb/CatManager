@@ -196,3 +196,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [x] Add read-only supplier profile keyed by exact BPID/supplierId across active and archived panels, showing panel memberships, qualifications, review dates, weighted scores, regional selections and open actions; explicitly avoid merging similar names or treating panel-specific values as global. Link from supplier table; tests, CI and merge.
 
   - Evidence: exact supplierId cross-panel read-only profile with memberships, qualification, review status, weighted scores, coverage and open actions. Same-named different BPIDs remain separate. Regression tests passed in PR CI run 37841687467 on commit 432df803c4e49921cf784b245c6c13f8ff456fcb.
+
+### DEV-046 — Data quality dashboard
+- [ ] Add a read-only, cross-panel quality dashboard highlighting missing supplier identity and configured required fields, invalid star/number/region selections, absent review dates, orphaned custom-field values, and broken scorecard references. Group findings by panel and supplier with direct remediation links, no silent repair. Add regression tests and verify CI before merge.
