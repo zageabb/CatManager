@@ -146,12 +146,13 @@
   const addWidget=document.querySelector("#add-widget");
   let widgets=parseValue(widgetHidden);
   const widgetMetrics=["count","count_where","sum","average","minimum","maximum","distinct","ratio","percentage"];
-  const availableWidgetFields=[{fieldId:"supplierId",fieldName:"Supplier ID"},
-    {fieldId:"supplierName",fieldName:"Supplier Name"}]
+  const availableWidgetFields=[{fieldId:"supplierId",fieldName:"Supplier ID",type:"text"},
+    {fieldId:"supplierName",fieldName:"Supplier Name",type:"text"}]
     .concat(widgetRoot ? JSON.parse(widgetRoot.dataset.fields||"[]") : []);
-  function fieldSelect(current){
-    return '<option value="">Choose field…</option>'+availableWidgetFields.map(function(f){
-      return '<option value="'+esc(f.fieldId)+'" '+(f.fieldId===current?"selected":"")+'>'+esc(f.fieldName)+'</option>';
+  function fieldSelect(current,ratingOnly){
+    const candidates=ratingOnly?availableWidgetFields.filter(f=>["stars","number"].includes(f.type)):availableWidgetFields;
+    return '<option value="">Choose source field…</option>'+candidates.map(function(f){
+      return '<option value="'+esc(f.fieldId)+'" '+(f.fieldId===current?"selected":"")+'>'+esc(f.fieldName)+' ('+esc(f.type||"text")+')</option>';
     }).join("");
   }
   function renderWidgets(){
@@ -162,18 +163,19 @@
       row.className="field-row custom widget-row";
       row.innerHTML='<input class="widget-title" aria-label="Widget title" placeholder="KPI title" value="'+esc(w.title||"")+'">'+
         '<select class="widget-metric" aria-label="Calculation">'+widgetMetrics.map(function(m){return '<option value="'+m+'" '+(w.metric===m?"selected":"")+'>'+m.replace("_"," ")+'</option>';}).join("")+'</select>'+
-        '<select class="widget-field" aria-label="Source field">'+fieldSelect(w.fieldId||"")+'</select>'+
+        '<select class="widget-field" aria-label="Source custom field">'+fieldSelect(w.fieldId||"",["stars","stars_both"].includes(w.format))+'</select>'+
         '<select class="widget-other" aria-label="Denominator field">'+fieldSelect(w.otherFieldId||"")+'</select>'+
         '<input class="widget-match" aria-label="Count matching value" placeholder="Equals..." value="'+esc(w.match||"")+'">'+
-        '<select class="widget-format" aria-label="Display format">'+["number","currency","percentage","stars"].map(function(f){return '<option '+(w.format===f?"selected":"")+'>'+f+'</option>';}).join("")+'</select>'+
+        '<select class="widget-format" aria-label="Output format">'+["number","currency","percentage","stars","stars_both"].map(function(f){return '<option value="'+f+'" '+(w.format===f?"selected":"")+'>'+({stars:"Stars",stars_both:"Stars and number",number:"Number",currency:"Currency",percentage:"Percentage"}[f])+'</option>';}).join("")+'</select>'+
         '<select class="widget-display" aria-label="Display location">'+["panel","supplier","both"].map(function(d){return '<option value="'+d+'" '+((w.display||"panel")===d?"selected":"")+'>'+({panel:"Panel KPI",supplier:"Supplier column",both:"Both"}[d])+'</option>';}).join("")+'</select>'+
         '<button class="btn compact danger widget-remove" type="button">Remove</button>';
       [[".widget-title","title"],[".widget-metric","metric"],[".widget-field","fieldId"],
        [".widget-other","otherFieldId"],[".widget-match","match"],[".widget-format","format"],[".widget-display","display"]].forEach(function(item){
-        row.querySelector(item[0]).addEventListener("change",function(e){w[item[1]]=e.target.value;syncWidgets();renderWidgets();});
+        row.querySelector(item[0]).addEventListener("change",function(e){w[item[1]]=e.target.value;if(item[1]==="format" && ["stars","stars_both"].includes(w.format)){if(!["stars","number"].includes((availableWidgetFields.find(f=>f.fieldId===w.fieldId)||{}).type))w.fieldId="";if(!["average","minimum","maximum"].includes(w.metric))w.metric="average";}syncWidgets();renderWidgets();});
       });
       row.querySelector(".widget-title").addEventListener("input",function(e){w.title=e.target.value;syncWidgets();});
       row.querySelector(".widget-match").addEventListener("input",function(e){w.match=e.target.value;syncWidgets();});
+      row.querySelector(".widget-metric").querySelectorAll("option").forEach(function(opt){opt.disabled=["stars","stars_both"].includes(w.format)&&!["average","minimum","maximum"].includes(opt.value);});
       row.querySelector(".widget-other").hidden=!["ratio","percentage"].includes(w.metric);
       row.querySelector(".widget-match").hidden=w.metric!=="count_where";
       row.querySelector(".widget-field").hidden=w.metric==="count";

@@ -1198,3 +1198,35 @@ def test_multiselect_blocks_one_field_many_coloured_segments(client):
     assert client.get("/api/panels/CMP-REGIONS").get_json()["panel"]["suppliers"][0]["customFields"]["regional_coverage"]==["MEA","NAM"]
     assert client.post("/panels/CMP-REGIONS/suppliers/S1/edit",data={"supplier_name":"One"}).status_code==302
     assert client.get("/api/panels/CMP-REGIONS").get_json()["panel"]["suppliers"][0]["customFields"]["regional_coverage"]==[]
+
+def test_star_kpi_selects_custom_field_aggregation_and_output(client):
+    create_panel(client, "CMP-RATING-KPI")
+    fields=[{"fieldId":"quality","fieldName":"Quality Rating","type":"stars"},
+            {"fieldId":"score","fieldName":"Score","type":"number"},
+            {"fieldId":"notes","fieldName":"Notes","type":"text"}]
+    widgets=[
+        {"title":"Average Quality","metric":"average","fieldId":"quality","format":"stars_both","display":"both"},
+        {"title":"Worst Quality","metric":"minimum","fieldId":"quality","format":"stars","display":"panel"},
+        {"title":"Best Quality","metric":"maximum","fieldId":"quality","format":"number","display":"panel"}
+    ]
+    def save(widgets):
+        return client.post("/panels/CMP-RATING-KPI/configuration",data={
+            "field_groups_json":"[]","fields_json":json.dumps(fields),
+            "dashboard_widgets_json":json.dumps(widgets)
+        })
+    assert save(widgets).status_code==302
+    assert b"stars_both" in client.get("/panels/CMP-RATING-KPI/configuration").data
+    for sid,rating in [("A","3"),("B","4.5"),("C","5")]:
+        assert client.post("/panels/CMP-RATING-KPI/suppliers/new",data={
+            "supplier_id":sid,"supplier_name":sid,"custom_quality":rating
+        }).status_code==302
+    html=client.get("/panels/CMP-RATING-KPI").get_data(as_text=True)
+    assert "Average Quality" in html and "4.2 out of 5 stars" in html
+    assert "Worst Quality" in html and "3.0 out of 5 stars" in html
+    assert "Best Quality" in html and "5.00" in html
+    widgets[0]["fieldId"]="notes"
+    assert save(widgets).status_code==400
+    widgets[0]["fieldId"]="quality"
+    widgets[0]["metric"]="ratio"
+    widgets[0]["otherFieldId"]="score"
+    assert save(widgets).status_code==400

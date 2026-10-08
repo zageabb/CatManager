@@ -354,10 +354,17 @@ def create_app(test_config=None):
                 raise ValueError("Widget refers to an unknown supplier field.")
             if metric in ("ratio", "percentage") and other not in valid_fields:
                 raise ValueError("Widget denominator refers to an unknown field.")
+            fmt = widget.get("format", "number")
+            if fmt in ("stars", "stars_both"):
+                field_types = {f["fieldId"]: f["type"] for f in fields}
+                if field_types.get(field) not in ("number", "stars"):
+                    raise ValueError("Star KPI requires a Number or Star Rating custom field.")
+                if metric not in ("average", "minimum", "maximum"):
+                    raise ValueError("Star KPI supports Average, Minimum or Maximum.")
             clean.append({"widgetId": str(widget.get("widgetId") or uuid4().hex),
                           "title": title, "metric": metric, "fieldId": field,
                           "otherFieldId": other, "match": str(widget.get("match", ""))[:100],
-                          "format": widget.get("format") if widget.get("format") in ("number","currency","percentage","stars") else "number",
+                          "format": widget.get("format") if widget.get("format") in ("number","currency","percentage","stars","stars_both") else "number",
                           "display": widget.get("display") if widget.get("display") in ("panel","supplier","both") else "panel"})
         return clean
 
