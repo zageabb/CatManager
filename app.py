@@ -453,7 +453,7 @@ def create_app(test_config=None):
         if version < 5:
             core.setdefault("dashboardWidgets", [])
         data["schemaVersion"] = 5
-        metadata["version"] = max(int(metadata.get("version", 1)), 4)
+        metadata["version"] = max(int(metadata.get("version", 1)), 5)
         required = ["panelId","panelName","category","business","region","panelOwner","fieldGroups","supplierFields","suppliers","leadMdfCode","mdfCodes"]
         if not all(k in core for k in required):
             missing = [k for k in required if k not in core]
@@ -1151,7 +1151,7 @@ def create_app(test_config=None):
     def append_audit(data, action, entity_id, details=None):
         data["schemaVersion"] = max(int(data.get("schemaVersion", 1)), 5)
         metadata = data["panel"].setdefault("metadata", {})
-        metadata["version"] = max(int(metadata.get("version", 1)), 4)
+        metadata["version"] = max(int(metadata.get("version", 1)), 5)
         metadata["updatedAt"] = now_iso()
         trail = metadata.setdefault("auditTrail", [])
         trail.append({
