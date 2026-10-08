@@ -1132,3 +1132,39 @@ def test_supplier_level_kpi_columns_and_display_modes(client):
     assert response.status_code == 302
     html = client.get("/panels/CMP-SUP-KPI").get_data(as_text=True)
     assert html.count('class="computed-kpi-head"') == 1
+
+def test_star_rating_supplier_edit_bulk_validation_and_kpi_display(client):
+    create_panel(client, "CMP-STARS")
+    fields = [{"fieldId":"quality","fieldName":"Quality","type":"stars","required":False,"options":[]}]
+    widgets = [{"title":"Average Quality","metric":"average","fieldId":"quality","format":"stars","display":"both"}]
+    assert client.post("/panels/CMP-STARS/configuration", data={
+        "field_groups_json":"[]","fields_json":json.dumps(fields),
+        "dashboard_widgets_json":json.dumps(widgets)
+    }).status_code == 302
+    assert b'value="stars"' in client.get("/panels/CMP-STARS/configuration").data or b"fields-json" in client.get("/panels/CMP-STARS/configuration").data
+    assert client.post("/panels/CMP-STARS/suppliers/new",data={
+        "supplier_id":"A","supplier_name":"Alpha","custom_quality":"4.5"
+    }).status_code == 302
+    assert client.post("/panels/CMP-STARS/suppliers/new",data={
+        "supplier_id":"B","supplier_name":"Beta","custom_quality":"3.5"
+    }).status_code == 302
+    response = client.get("/panels/CMP-STARS")
+    assert response.status_code == 200
+    assert b"Average Quality" in response.data
+    assert b"4.0 out of 5 stars" in response.data
+    assert b"4.5 out of 5 stars" in response.data
+    assert b"3.5 out of 5 stars" in response.data
+    assert client.post("/panels/CMP-STARS/suppliers/A/edit",data={
+        "supplier_name":"Alpha","custom_quality":"5.5"
+    }).status_code == 400
+    assert client.post("/panels/CMP-STARS/suppliers/bulk-edit",data={
+        "A__quality":"4.3", "B__quality":"3"
+    }).status_code == 400
+    assert client.post("/panels/CMP-STARS/suppliers/bulk-edit",data={
+        "A__quality":"5", "B__quality":"4"
+    }).status_code == 302
+    assert b"4.5 out of 5 stars" in client.get("/panels/CMP-STARS").data
+    assert client.post("/panels/CMP-STARS/suppliers/new",data={
+        "supplier_id":"C","supplier_name":"Invalid","custom_quality":"-1"
+    }).status_code == 400
+    assert any(x["type"] == "stars" for x in client.get("/api/field-templates").get_json())

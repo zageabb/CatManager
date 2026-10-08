@@ -126,3 +126,9 @@
 .widget-row input,.widget-row select{min-width:8rem;flex:1 1 8rem;}
 @media(max-width:720px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:450px){.kpi-grid{grid-template-columns:1fr;}}
+
+/* Five-star rating with fractional fill and a precise accessible numeric label. */
+.star-rating{display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap;}
+.star-rating-track{position:relative;display:inline-block;color:#c5cbd3;font-size:1.12rem;letter-spacing:.02em;line-height:1;}
+.star-rating-fill{position:absolute;left:0;top:0;color:#db9c17;overflow:hidden;white-space:nowrap;}
+.star-rating-number{font-size:.8rem;font-weight:600;color:inherit;}

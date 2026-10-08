@@ -6,6 +6,8 @@
   <td class="editable-cell">
     {% if f.type=='boolean' %}
       <select name="{{ s.supplierId }}__{{ f.fieldId }}"><option value="" {{ 'selected' if current is none or current=='' }}>Not assessed</option><option value="true" {{ 'selected' if current is sameas true }}>✓ Yes</option><option value="false" {{ 'selected' if current is sameas false }}>✗ No</option></select>
+    {% elif f.type=='stars' %}
+      <input name="{{ s.supplierId }}__{{ f.fieldId }}" type="number" min="0" max="5" step="0.5" value="{{ current if current is not none else '' }}" aria-label="{{ f.fieldName }} rating out of 5">
     {% elif f.type=='dropdown' %}
       <select name="{{ s.supplierId }}__{{ f.fieldId }}">
         <option value="">Select…</option>

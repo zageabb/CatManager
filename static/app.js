@@ -87,7 +87,7 @@
       row.className="field-row custom";
       row.draggable=true;
       row.dataset.index=index;
-      const opts=["text","number","dropdown","date","boolean"].map(function(x){return '<option value="'+x+'" '+(f.type===x?"selected":"")+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>';}).join("");
+      const opts=["text","number","dropdown","date","boolean","stars"].map(function(x){return '<option value="'+x+'" '+(f.type===x?"selected":"")+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>';}).join("");
       row.innerHTML=
         '<span class="drag" title="Drag to reorder">☰</span>'+
         '<input class="field-name" value="'+esc(f.fieldName||"")+'" placeholder="Field name">'+
@@ -165,7 +165,7 @@
         '<select class="widget-field" aria-label="Source field">'+fieldSelect(w.fieldId||"")+'</select>'+
         '<select class="widget-other" aria-label="Denominator field">'+fieldSelect(w.otherFieldId||"")+'</select>'+
         '<input class="widget-match" aria-label="Count matching value" placeholder="Equals..." value="'+esc(w.match||"")+'">'+
-        '<select class="widget-format" aria-label="Display format">'+["number","currency","percentage"].map(function(f){return '<option '+(w.format===f?"selected":"")+'>'+f+'</option>';}).join("")+'</select>'+
+        '<select class="widget-format" aria-label="Display format">'+["number","currency","percentage","stars"].map(function(f){return '<option '+(w.format===f?"selected":"")+'>'+f+'</option>';}).join("")+'</select>'+
         '<select class="widget-display" aria-label="Display location">'+["panel","supplier","both"].map(function(d){return '<option value="'+d+'" '+((w.display||"panel")===d?"selected":"")+'>'+({panel:"Panel KPI",supplier:"Supplier column",both:"Both"}[d])+'</option>';}).join("")+'</select>'+
         '<button class="btn compact danger widget-remove" type="button">Remove</button>';
       [[".widget-title","title"],[".widget-metric","metric"],[".widget-field","fieldId"],
