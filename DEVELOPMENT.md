@@ -96,3 +96,39 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [x] BUG-031 MDF multi-select search: CSS `.mdf-option{display:flex!important}` overrides rows' `hidden` property. Ensure live case-insensitive filtering by code and description actually hides non-matching options, while preserving selected MDFs and Lead MDF. Add a regression guard and pass CI prior to main/UDA merge.
 
   - Evidence: CSS `[hidden]` override prevents forced flex styling from showing filtered-out MDF rows; regression checks CSS/JS/template contract. PR CI run 37810061015 passed on 79d02261790fe1105356dfc42eab43d9c1d22a70.
+
+
+## Version 3 baseline and proposed development (management ideas register, 08 October 2026)
+- **Delivered Version 3 baseline:** commit `967e48ae8fc9f980032934c23cd38b6bb38af585` on `main`, incorporating V3 enhancements DEV-024–DEV-030, DEV-029 refinement and BUG-031. Original immutable V2 demo tag: `Version_2_Demo` at `384bac5588bd1a633754a108c5ebbbc85572b16a`.
+- **Requested release tag:** `version3`, pointing to baseline commit above. **NOT CREATED**; connected GitHub write actions do not expose creation of Git tags. To create using an authenticated repository clone: `git tag version3 967e48ae8fc9f980032934c23cd38b6bb38af585 && git push origin version3`. Verify the ref before creating to avoid replacing an existing tag.
+- **Scope distinction:** Items below are **proposals only** for discussion, not approved, implemented or part of the delivered version3 code baseline. Existing DEV-017–019 remain unfinished.
+- **Design principles:** preserve panel-specific custom field IDs and JSON contract; link cross-panel suppliers by BPID where available; use reversible migrations and audited changes; stage work by value/risk.
+
+### Proposed V3+ ideas backlog — not approved
+| Ref | Priority | Proposal | Indicative effort | Outcome |
+| --- | --- | --- | --- | --- |
+| DEV-032 | High | Supplier table filtering/sorting by all custom field types | Medium | Find matching suppliers faster |
+| DEV-033 | High | Configurable supplier columns: visibility/order/sticky ID/name/saved view | Medium | Keep wide panels usable |
+| DEV-034 | High | Excel export/edit/re-import with preview, validation and conflict safety | Medium–High | Scale supplier updates |
+| DEV-035 | High | Guided KPI designer with live calculation/display preview | Medium | Easier self-service reporting |
+| DEV-036 | High | Side-by-side selected-supplier comparison | Medium | Support evaluation decisions |
+| DEV-037 | High | Unsaved changes navigation protection | Low | Reduce accidental data loss |
+| DEV-038 | Medium | Weighted supplier scoring with transparent criteria and evidence | Medium–High | Consistent evaluation |
+| DEV-039 | Medium | Supplier actions/owners/due dates and follow-up tracking | Medium | Close qualification gaps |
+| DEV-040 | Medium | Configurable review/expiry notifications and dashboard flags | Medium | Proactive qualification upkeep |
+| DEV-041 | Medium | Regional/MDF coverage and single-source risk analysis | Medium | Identify sourcing gaps |
+| DEV-042 | Medium | Governed reusable panel templates | Medium | Consistent panel setup |
+| DEV-043 | Medium | Supplier trend history and field-change comparison | Medium | Explain progress |
+| DEV-044 | Future | Shareable management summaries (Excel/PDF) | Medium | Communicate panel results |
+| DEV-045 | Future | Cross-panel BPID-linked supplier profile | High | One supplier across categories |
+| DEV-046 | Future | Data-quality/completeness dashboard | Medium | Trustworthy assessment data |
+| DEV-047 | Future | Governed supplier-master synchronisation | High | Reduce manual reference upkeep |
+| DEV-048 | Foundation | Complete DEV-017/018 authentication, access controls, CSRF, migrations and production readiness | High | Safe broader rollout |
+
+### Proposed sequencing and decision gates
+1. **Usability first:** DEV-032, DEV-033 and DEV-037; validate on panels with large custom-field sets.
+2. **Data maintenance and comparison:** DEV-034, DEV-035 and DEV-036; demonstrate time saved and decision quality.
+3. **Category intelligence:** DEV-038–043; agree scoring and qualification policies with business owners.
+4. **Scale and govern:** DEV-044–048 plus existing DEV-017/018/019; agree data owners, deployment and permissions before multi-user expansion.
+5. **Management review required:** prioritise and size the options above before implementation. No delivery dates or ROI claims have yet been validated.
+
