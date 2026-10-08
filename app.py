@@ -110,6 +110,14 @@ def create_app(test_config=None):
             updated_at TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_supplier_master_name ON supplier_master(supplier_name);
+        CREATE TABLE IF NOT EXISTS field_templates (
+            template_id TEXT PRIMARY KEY,
+            field_name TEXT NOT NULL,
+            field_type TEXT NOT NULL,
+            options_json TEXT NOT NULL DEFAULT '[]',
+            required INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS app_settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL,
@@ -797,6 +805,32 @@ def create_app(test_config=None):
         response = app.response_class(body, mimetype="application/json")
         response.headers["Content-Disposition"] = f'attachment; filename="{panel_id}.json"'
         return response
+
+    @app.route("/api/field-templates", methods=["GET", "POST"])
+    def field_templates():
+        db = get_db()
+        if request.method == "GET":
+            rows = db.execute("SELECT * FROM field_templates ORDER BY field_name COLLATE NOCASE").fetchall()
+            return jsonify([{
+                "templateId": row["template_id"], "fieldName": row["field_name"],
+                "type": row["field_type"], "options": json.loads(row["options_json"]),
+                "required": bool(row["required"]),
+            } for row in rows])
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return jsonify({"error": "Expected field JSON object."}), 400
+        try:
+            fields = parse_fields(json.dumps([body]))
+        except (TypeError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+        field = fields[0]
+        tid = uuid4().hex
+        db.execute("INSERT INTO field_templates(template_id,field_name,field_type,options_json,required,updated_at) VALUES(?,?,?,?,?,?)",
+                   (tid, field["fieldName"], field["type"], json.dumps(field["options"]), int(field["required"]), now_iso()))
+        db.commit()
+        return jsonify({"templateId": tid, "fieldName": field["fieldName"],
+                        "type": field["type"], "options": field["options"],
+                        "required": field["required"]}), 201
 
     @app.route("/panels/new", methods=["GET","POST"])
     def panel_new():
