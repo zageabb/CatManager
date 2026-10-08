@@ -6,7 +6,7 @@
 <div class="page-title-row">
   <div><h1>Panel Configuration</h1><p class="subtitle">{{ core.panelName }} — define the supplier fields and how they are grouped on supplier forms.</p></div>
 </div>
-<form method="post" class="form-card" id="panel-form">
+<form method="post" class="form-card" id="panel-form" data-unsaved-guard>
   <div class="section-heading">
     <div><h2>Supplier data definition</h2><p>Fixed supplier fields are always present. Add, group and reorder panel-specific custom fields below.</p></div>
     <div class="actions"><button class="btn" type="button" id="add-group">+ Add group</button><button class="btn" type="button" id="add-field">+ Add custom field</button><select id="template-selector" aria-label="Predefined field"><option value="">Select predefined field…</option></select><button class="btn" type="button" id="add-template-field">+ Use predefined</button></div>
