@@ -4,6 +4,8 @@ import io
 import json
 import os
 import secrets
+import re
+from html import escape
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -86,6 +88,23 @@ def create_app(test_config=None):
         if not supplied or not expected or not secrets.compare_digest(str(supplied), str(expected)):
             from flask import abort
             abort(400)
+
+    @app.after_request
+    def inject_csrf_form_fields(response):
+        if not app.config.get("CSRF_ENABLED") or response.status_code != 200 or not response.mimetype == "text/html":
+            return response
+        markup=response.get_data(as_text=True)
+        pattern=r'(<form\\b(?=[^>]*\\bmethod\\s*=\\s*["\\\']post["\\\'])[^>]*>)'
+        if not re.search(pattern,markup,re.IGNORECASE):
+            return response
+        token=session.get("_csrf_token")
+        if not token:
+            token=secrets.token_urlsafe(32)
+            session["_csrf_token"]=token
+        field='<input type="hidden" name="_csrf_token" value="'+escape(token,quote=True)+'">'
+        markup=re.sub(pattern,lambda m:m.group(1)+field,markup,flags=re.IGNORECASE)
+        response.set_data(markup)
+        return response
 
     @app.context_processor
     def csrf_context():
