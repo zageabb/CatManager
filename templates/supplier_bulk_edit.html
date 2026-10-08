@@ -30,7 +30,7 @@
 <div class="page-title-row">
   <div><h1>Edit supplier data</h1><p class="subtitle">Spreadsheet-style editing for custom supplier fields only. Fixed supplier details are read-only here.</p></div>
 </div>
-<form method="post" class="table-card bulk-edit-card">
+<form method="post" class="table-card bulk-edit-card" data-unsaved-guard>
   <div class="table-toolbar">
     <div><h2>{{ core.panelName }}</h2><p>Custom fields are arranged using the panel's field groups. New fields appear automatically for existing suppliers.</p></div>
     <div class="actions"><a class="btn" href="{{ url_for('panel_view', panel_id=panel.panel_id) }}">Cancel</a><button class="btn primary" type="submit">Save custom fields</button></div>
