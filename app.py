@@ -331,27 +331,41 @@ def create_app(test_config=None):
 
     def calculate_dashboard_widgets(core):
         suppliers = core.get("suppliers", [])
+        config = get_dashboard_config()
+        base_currency = config["baseCurrency"]
+        prefix = {"GBP": "£", "EUR": "€", "USD": "$"}.get(base_currency, base_currency + " ")
         def values(field_id):
             if field_id in ("supplierId", "supplierName"):
                 return [supplier.get(field_id) for supplier in suppliers]
             return [supplier.get("customFields", {}).get(field_id) for supplier in suppliers]
         def numbers(field_id):
-            out = []
-            for value in values(field_id):
+            out, excluded = [], 0
+            for supplier in suppliers:
+                value = supplier.get("customFields", {}).get(field_id)
                 if isinstance(value, bool) or value in (None, ""):
                     continue
-                try:
-                    number = float(value)
-                    if number == number and abs(number) != float("inf"):
-                        out.append(number)
-                except (TypeError, ValueError, OverflowError):
-                    continue
-            return out
+                if field_id == config["spendFieldId"]:
+                    converted = convert_spend(value, supplier.get("customFields", {}).get(config["currencyFieldId"]), config)
+                    if converted is None:
+                        excluded += 1
+                        continue
+                    number = converted
+                else:
+                    try:
+                        number = float(value)
+                    except (TypeError, ValueError, OverflowError):
+                        excluded += 1
+                        continue
+                if number == number and abs(number) != float("inf"):
+                    out.append(number)
+                else:
+                    excluded += 1
+            return out, excluded
         results = []
         for widget in core.get("dashboardWidgets", [])[:6]:
             metric = widget.get("metric")
             fid = widget.get("fieldId", "")
-            nums = numbers(fid) if metric in ("sum","average","minimum","maximum","ratio","percentage") else []
+            nums, excluded = numbers(fid) if metric in ("sum","average","minimum","maximum","ratio","percentage") else ([], 0)
             value = None
             if metric == "count":
                 value = len(suppliers)
@@ -369,11 +383,14 @@ def create_app(test_config=None):
             elif metric == "maximum":
                 value = max(nums) if nums else None
             elif metric in ("ratio", "percentage"):
-                denominator = sum(numbers(widget.get("otherFieldId", "")))
+                denominator_values, denominator_excluded = numbers(widget.get("otherFieldId", ""))
+                excluded += denominator_excluded
+                denominator = sum(denominator_values)
                 if denominator:
                     value = sum(nums)/denominator * (100 if metric == "percentage" else 1)
             results.append({"title": widget.get("title", "Widget"), "value": value,
-                            "metric": metric, "format": widget.get("format", "number")})
+                            "metric": metric, "format": widget.get("format", "number"),
+                            "currencyPrefix": prefix, "excluded": excluded})
         return results
 
     def parse_field_groups(raw):
