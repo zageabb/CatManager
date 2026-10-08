@@ -134,4 +134,5 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 
 
 ### Current implementation: DEV-032 (supplier table filtering and sorting)
-- [ ] DEV-032: Local supplier table keyword search, field-specific filters for fixed and custom fields, and type-aware column sorting (including numeric/star, boolean and selected region values); do not modify data or disrupt row actions. Regression tests and CI required before main merge.
+- [x] DEV-032: Local supplier table keyword search, field-specific filters for fixed and custom fields, and type-aware column sorting (including numeric/star, boolean and selected region values); do not modify data or disrupt row actions. Regression tests and CI required before main merge.
+  - Evidence: field-specific or all-column live keyword search, visible results count, reset, numeric/star-aware sorting and per-field values for regions/boolean states. Server-side supplier data remains unchanged. Tests pass in PR CI run 37812669255, commit 50f4a3491f2628668fabda8f39bab76db8764e9c.
