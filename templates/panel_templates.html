@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Panel templates{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('portfolio') }}">Category panel</a><span>›</span><span>Panel templates</span>{% endblock %}
+{% block content %}
+<div class="page-title-row"><div><h1>Panel templates</h1><p>Reusable snapshots of field groups, supplier fields, KPIs and scoring. Supplier records and audit history are never included.</p></div></div>
+<section class="table-card"><div class="table-scroll"><table class="data-table"><thead><tr><th>Template</th><th>Origin panel</th><th>Created</th><th>Action</th></tr></thead><tbody>{% for template in templates %}<tr><td>{{ template.name }}</td><td>{{ template.source_panel_id }}</td><td>{{ template.created_at }}</td><td><a class="btn compact" href="{{ url_for('panel_from_template',template_id=template.template_id) }}">Create panel</a></td></tr>{% else %}<tr><td colspan="4">No templates saved yet. Open a panel to save its configuration.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}
