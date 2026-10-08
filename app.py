@@ -25,7 +25,7 @@ CATEGORIES = [
 ]
 BUSINESSES = ["GI", "GA", "GPQSS", "HVDC"]
 REGION_LEVELS = ["Global", "Region", "HUB", "Country"]
-FIELD_TYPES = ["number", "text", "dropdown", "date", "boolean", "stars"]
+FIELD_TYPES = ["number", "text", "dropdown", "date", "boolean", "stars", "multiselect_blocks"]
 DEFAULT_MDF_CODES = [
     {"code": "3GF", "description": "Grid equipment"},
     {"code": "MDF-TR-001", "description": "Power Transformers"},
@@ -313,9 +313,22 @@ def create_app(test_config=None):
                 fid = f"{base}_{n}"
                 n += 1
             seen.add(fid)
-            options = field.get("options",[]) if ftype == "dropdown" else []
+            options = field.get("options",[]) if ftype in ("dropdown", "multiselect_blocks") else []
+            if ftype == "multiselect_blocks" and (not isinstance(options, list) or len(options) > 12 or not options):
+                raise ValueError("Multi-select blocks need 1 to 12 options.")
+            if ftype == "multiselect_blocks" and len(set(str(x).strip() for x in options)) != len(options):
+                raise ValueError("Multi-select block options must be unique.")
             clean.append({"fieldId":fid,"fieldName":name,"type":ftype,"options":[str(x).strip() for x in options if str(x).strip()],"required":bool(field.get("required",False)),"groupId":str(field.get("groupId") or "").strip(),"order":index+1})
         return clean
+
+    def parse_multiselect_value(field, values):
+        allowed = field.get("options", [])
+        selected = list(dict.fromkeys(values))
+        if any(value not in allowed for value in selected):
+            raise ValueError("Unknown selection in " + field["fieldName"])
+        if field.get("required") and not selected:
+            raise ValueError(field["fieldName"] + " requires at least one selection.")
+        return selected
 
     def parse_dashboard_widgets(raw, fields):
         try:
@@ -1387,6 +1400,12 @@ def create_app(test_config=None):
             custom = {}
             for field in data["panel"].get("supplierFields",[]):
                 value = request.form.get(f"custom_{field['fieldId']}","")
+                if field["type"] == "multiselect_blocks":
+                    try:
+                        value = parse_multiselect_value(field, request.form.getlist(f"custom_{field['fieldId']}"))
+                    except ValueError as exc:
+                        flash(str(exc), "error")
+                        return render_template("supplier_form.html", panel=panel, supplier=locals().get("previous")), 400
                 if field["type"] == "boolean":
                     value = True if value == "true" else False if value == "false" else None
                 if field["type"] == "stars" and value != "":
@@ -1431,6 +1450,12 @@ def create_app(test_config=None):
             custom = supplier.setdefault("customFields", {})
             for field in data["panel"].get("supplierFields",[]):
                 value = request.form.get(f"custom_{field['fieldId']}","")
+                if field["type"] == "multiselect_blocks":
+                    try:
+                        value = parse_multiselect_value(field, request.form.getlist(f"custom_{field['fieldId']}"))
+                    except ValueError as exc:
+                        flash(str(exc), "error")
+                        return render_template("supplier_form.html", panel=panel, supplier=previous), 400
                 if field["type"] == "boolean":
                     value = True if value == "true" else False if value == "false" else None
                 if field["type"] == "stars" and value != "":
@@ -1470,6 +1495,12 @@ def create_app(test_config=None):
                 for field in fields:
                     key = f"{supplier_id}__{field['fieldId']}"
                     value = request.form.get(key, "")
+                    if field["type"] == "multiselect_blocks":
+                        try:
+                            value = parse_multiselect_value(field, request.form.getlist(key))
+                        except ValueError as exc:
+                            flash(str(exc), "error")
+                            return render_template("supplier_bulk_edit.html", panel=panel), 400
                     if field["type"] == "boolean":
                         value = True if value == "true" else False if value == "false" else None
                     if field["type"] == "stars" and value != "":

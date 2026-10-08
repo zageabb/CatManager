@@ -1168,3 +1168,33 @@ def test_star_rating_supplier_edit_bulk_validation_and_kpi_display(client):
         "supplier_id":"C","supplier_name":"Invalid","custom_quality":"-1"
     }).status_code == 400
     assert any(x["type"] == "stars" for x in client.get("/api/field-templates").get_json())
+
+def test_multiselect_blocks_one_field_many_coloured_segments(client):
+    create_panel(client, "CMP-REGIONS")
+    fields=[{"fieldId":"regional_coverage","fieldName":"Regional Coverage",
+             "type":"multiselect_blocks","options":["EU","MED","MEA","NAM","LAM"]}]
+    assert client.post("/panels/CMP-REGIONS/configuration",data={
+        "field_groups_json":"[]","fields_json":json.dumps(fields)
+    }).status_code==302
+    page=client.get("/panels/CMP-REGIONS/suppliers/new")
+    assert b'value="EU"' in page.data and b'value="LAM"' in page.data
+    assert client.post("/panels/CMP-REGIONS/suppliers/new",data={
+        "supplier_id":"S1","supplier_name":"One",
+        "custom_regional_coverage":["EU","MED","LAM"]
+    }).status_code==302
+    payload=client.get("/api/panels/CMP-REGIONS").get_json()["panel"]
+    assert payload["suppliers"][0]["customFields"]["regional_coverage"]==["EU","MED","LAM"]
+    html=client.get("/panels/CMP-REGIONS").get_data(as_text=True)
+    assert html.count("multi-block-segment")==5
+    assert html.count("multi-block-active")==3
+    assert html.count("multi-block-inactive")==2
+    assert client.post("/panels/CMP-REGIONS/suppliers/bulk-edit",data={
+        "S1__regional_coverage":["MEA","NAM"]
+    }).status_code==302
+    assert client.get("/api/panels/CMP-REGIONS").get_json()["panel"]["suppliers"][0]["customFields"]["regional_coverage"]==["MEA","NAM"]
+    assert client.post("/panels/CMP-REGIONS/suppliers/S1/edit",data={
+        "supplier_name":"One","custom_regional_coverage":["UNKNOWN"]
+    }).status_code==400
+    assert client.get("/api/panels/CMP-REGIONS").get_json()["panel"]["suppliers"][0]["customFields"]["regional_coverage"]==["MEA","NAM"]
+    assert client.post("/panels/CMP-REGIONS/suppliers/S1/edit",data={"supplier_name":"One"}).status_code==302
+    assert client.get("/api/panels/CMP-REGIONS").get_json()["panel"]["suppliers"][0]["customFields"]["regional_coverage"]==[]
