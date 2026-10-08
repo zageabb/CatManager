@@ -1773,6 +1773,7 @@ def test_dev046_quality_checks_find_missing_invalid_orphan_fields():
     assert "invalid_region" in codes
     assert "orphan_value" in codes
     assert "missing_required" in codes
+    assert "missing_review" in codes
     assert inspect_panel({"supplierFields":[],"suppliers":[]})==[]
 
 
@@ -1785,3 +1786,13 @@ def test_dev046_data_quality_page_read_only(client):
     assert b"CMP-QUALITY" in page.data
     assert b"Data Quality" in client.get("/").data
     assert client.get("/api/panels/CMP-QUALITY").get_json()==before
+
+def test_dev046_review_date_validation_is_configurable():
+    from data_quality import inspect_panel
+    core={"supplierFields":[],"suppliers":[
+        {"supplierId":"A","supplierName":"Supplier A","customFields":{"expiry":"2026-13-01"}},
+        {"supplierId":"B","supplierName":"Supplier B","customFields":{"expiry":"2026-11-01"}},
+    ]}
+    findings=inspect_panel(core,"expiry")
+    assert any(f["code"]=="invalid_review" and f["supplierId"]=="A" for f in findings)
+    assert not any(f["supplierId"]=="B" and f["code"] in ("missing_review","invalid_review") for f in findings)
