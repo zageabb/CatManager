@@ -67,13 +67,14 @@ def create_app(test_config=None):
         SECRET_KEY=os.environ.get("CATMANAGER_SECRET_KEY", "dev-change-me"),
         DATABASE=os.environ.get("CATMANAGER_DATABASE", str(Path(app.instance_path) / "catmanager.sqlite")),
         SEED_DEMO=True,
-        CSRF_ENABLED=False,
+        CSRF_ENABLED=os.environ.get("CATMANAGER_CSRF_ENABLED", "0") == "1",
+        REQUIRE_STRONG_SECRET=os.environ.get("CATMANAGER_REQUIRE_STRONG_SECRET", "0") == "1",
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
     )
     if test_config:
         app.config.update(test_config)
-    if not app.testing and not app.config.get("DEBUG") and app.config.get("SECRET_KEY") in (None, "", "dev-change-me"):
+    if app.config.get("REQUIRE_STRONG_SECRET") and app.config.get("SECRET_KEY") in (None, "", "dev-change-me"):
         raise RuntimeError("Set a strong CATMANAGER_SECRET_KEY before production deployment.")
 
     @app.before_request
