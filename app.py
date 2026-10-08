@@ -381,6 +381,8 @@ def create_app(test_config=None):
             return out, excluded
         results = []
         for widget in core.get("dashboardWidgets", [])[:6]:
+            if widget.get("display", "panel") not in ("panel", "both"):
+                continue
             metric = widget.get("metric")
             fid = widget.get("fieldId", "")
             nums, excluded = numbers(fid) if metric in ("sum","average","minimum","maximum","ratio","percentage") else ([], 0)
