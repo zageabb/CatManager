@@ -1429,6 +1429,71 @@ def create_app(test_config=None):
         return render_template("data_quality.html",records=records,
             total_findings=sum(len(record["findings"]) for record in records))
 
+    def master_sync_differences(panel):
+        db = get_db()
+        changes = []
+        for supplier in panel["data"]["panel"].get("suppliers", []):
+            sid = supplier.get("supplierId")
+            if not sid:
+                continue
+            master = db.execute(
+                "SELECT supplier_name,address,post_code FROM supplier_master WHERE bpid=? AND active=1",
+                (sid,)).fetchone()
+            if master is None:
+                continue
+            fields = {}
+            for local, source in (("supplierName", "supplier_name"), ("address", "address"), ("postCode", "post_code")):
+                previous = supplier.get(local, "")
+                desired = master[source] or ""
+                if previous != desired:
+                    fields[local] = {"before": previous, "after": desired}
+            if fields:
+                changes.append({"supplierId": sid, "fields": fields})
+        return changes
+
+    @app.route("/panels/<panel_id>/suppliers/master-sync")
+    def supplier_master_sync_preview(panel_id):
+        panel = get_panel_or_404(panel_id)
+        if panel.get("archived_at"):
+            from flask import abort
+            abort(403)
+        changes = master_sync_differences(panel)
+        token = URLSafeTimedSerializer(app.secret_key, salt="catmanager-master-sync").dumps({
+            "panel": panel_id, "changes": changes
+        }) if changes else ""
+        return render_template("supplier_master_sync.html", panel=panel, changes=changes, token=token)
+
+    @app.route("/panels/<panel_id>/suppliers/master-sync/confirm", methods=["POST"])
+    def supplier_master_sync_confirm(panel_id):
+        panel = get_panel_or_404(panel_id)
+        if panel.get("archived_at"):
+            from flask import abort
+            abort(403)
+        try:
+            payload = URLSafeTimedSerializer(app.secret_key, salt="catmanager-master-sync").loads(
+                request.form.get("token", ""), max_age=1800)
+            if payload.get("panel") != panel_id:
+                raise ValueError("This preview belongs to a different panel.")
+            expected = payload.get("changes")
+            if not isinstance(expected, list) or not expected:
+                raise ValueError("Invalid master sync preview.")
+            current = master_sync_differences(panel)
+            if expected != current:
+                raise ValueError("Supplier or master data changed. Refresh the preview.")
+            suppliers = {supplier["supplierId"]: supplier for supplier in panel["data"]["panel"].get("suppliers", [])}
+            for change in current:
+                supplier = suppliers[change["supplierId"]]
+                for field, delta in change["fields"].items():
+                    supplier[field] = delta["after"]
+                supplier["masterLinked"] = True
+                append_audit(panel["data"], "supplier_master_synced", change["supplierId"],
+                             {"fields": change["fields"]})
+            save_panel_data(panel, panel["data"])
+            flash(f"Synchronised {len(current)} supplier(s) from active master data.", "success")
+        except (BadSignature, SignatureExpired, ValueError, KeyError, TypeError) as exc:
+            flash("Master sync was not applied: " + str(exc), "error")
+        return redirect(url_for("supplier_master_sync_preview", panel_id=panel_id))
+
     @app.route("/panels/<panel_id>/suppliers/compare")
     def supplier_compare(panel_id):
         panel = get_panel_or_404(panel_id)

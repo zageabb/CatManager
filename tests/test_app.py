@@ -1796,3 +1796,44 @@ def test_dev046_review_date_validation_is_configurable():
     findings=inspect_panel(core,"expiry")
     assert any(f["code"]=="invalid_review" and f["supplierId"]=="A" for f in findings)
     assert not any(f["supplierId"]=="B" and f["code"] in ("missing_review","invalid_review") for f in findings)
+
+def test_dev047_master_sync_preview_confirmation_and_conflict(client):
+    import sqlite3
+    from itsdangerous import URLSafeTimedSerializer
+    create_panel(client, "CMP-MASTER-SYNC")
+    assert client.post("/panels/CMP-MASTER-SYNC/suppliers/new",data={
+        "supplier_id":"BP-123","supplier_name":"Panel name","address":"Panel address",
+        "post_code":"ST1","custom_rating":"4"
+    }).status_code==302
+    with sqlite3.connect(client.application.config["DATABASE"]) as db:
+        db.execute("INSERT OR REPLACE INTO supplier_master(bpid,supplier_name,address,post_code,address_source,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+                   ("BP-123","New master name","Master address","ST2","imported",1,"2026-01-01","2026-01-01"))
+    preview=client.get("/panels/CMP-MASTER-SYNC/suppliers/master-sync")
+    assert preview.status_code==200
+    assert b"New master name" in preview.data
+    assert b"Panel name" in preview.data
+    before=client.get("/api/panels/CMP-MASTER-SYNC").get_json()["panel"]
+    assert before["suppliers"][0]["supplierName"]=="Panel name"
+    token=URLSafeTimedSerializer(client.application.secret_key,salt="catmanager-master-sync").dumps({
+        "panel":"CMP-MASTER-SYNC",
+        "changes":[{"supplierId":"BP-123","fields":{
+            "supplierName":{"before":"Panel name","after":"New master name"},
+            "address":{"before":"Panel address","after":"Master address"},
+            "postCode":{"before":"ST1","after":"ST2"}}}]
+    })
+    with sqlite3.connect(client.application.config["DATABASE"]) as db:
+        db.execute("UPDATE supplier_master SET supplier_name=? WHERE bpid=?",("Updated again","BP-123"))
+    stale=client.post("/panels/CMP-MASTER-SYNC/suppliers/master-sync/confirm",data={"token":token},follow_redirects=True)
+    assert b"not applied" in stale.data
+    assert client.get("/api/panels/CMP-MASTER-SYNC").get_json()["panel"]["suppliers"][0]["supplierName"]=="Panel name"
+    with sqlite3.connect(client.application.config["DATABASE"]) as db:
+        db.execute("UPDATE supplier_master SET supplier_name=? WHERE bpid=?",("New master name","BP-123"))
+    applied=client.post("/panels/CMP-MASTER-SYNC/suppliers/master-sync/confirm",data={"token":token})
+    assert applied.status_code==302
+    after=client.get("/api/panels/CMP-MASTER-SYNC").get_json()["panel"]
+    assert after["suppliers"][0]["supplierName"]=="New master name"
+    assert after["suppliers"][0]["address"]=="Master address"
+    assert after["suppliers"][0]["customFields"]==before["suppliers"][0]["customFields"]
+    assert any(e["action"]=="supplier_master_synced" for e in after["metadata"]["auditTrail"])
+    assert client.post("/panels/CMP-MASTER-SYNC/suppliers/master-sync/confirm",data={"token":"bad"}).status_code==302
+    assert client.get("/panels/UNKNOWN/suppliers/master-sync").status_code==404
