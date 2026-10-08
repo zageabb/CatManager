@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Supplier history{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('panel_view',panel_id=panel.panel_id) }}">{{ panel.panel_id }}</a><span>›</span><span>{{ supplier.supplierName }}</span><span>›</span><span>History</span>{% endblock %}
+{% block content %}
+<div class="page-title-row"><div><h1>Supplier history and trends</h1><p class="subtitle">{{ supplier.supplierName }} ({{ supplier.supplierId }}) — sourced from recorded audit events only</p></div><a class="btn" href="{{ url_for('panel_view',panel_id=panel.panel_id) }}">Back to panel</a></div>
+<section class="table-card"><h2>Numeric assessment history</h2><p class="help-text">Values show recorded changes, not inferred periodic measurements. Earlier values may be unavailable if historical audit events do not contain them.</p>
+{% for trend in history.trends %}<h3>{{ trend.label }}</h3><div class="table-scroll"><table class="data-table"><thead><tr><th>Recorded date</th><th>New value</th></tr></thead><tbody>{% for point in trend.points %}<tr><td>{{ point.timestamp }}</td><td>{{ point.value }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p>No numeric rating changes are recorded for this supplier.</p>{% endfor %}</section>
+<section class="table-card"><h2>Recorded changes</h2><div class="table-scroll"><table class="data-table"><thead><tr><th>Date</th><th>Actor</th><th>Event</th><th>Field</th><th>Previous value</th><th>New value</th></tr></thead><tbody>
+{% for event in history.events %}{% for change in event.changes %}<tr><td>{{ event.timestamp }}</td><td>{{ event.actor }}</td><td>{{ event.action.replace('_',' ') }}</td><td>{{ change.label }}</td><td>{{ change.before if change.before is not none else '—' }}</td><td>{{ change.after if change.after is not none else '—' }}</td></tr>{% endfor %}{% else %}<tr><td colspan="6">No recorded supplier changes. Historical changes predating the audit trail cannot be reconstructed.</td></tr>{% endfor %}
+</tbody></table></div></section>{% endblock %}
