@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_stars.html" import stars %}
+{% block title %}Compare Suppliers{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('panel_view', panel_id=panel.panel_id) }}">{{ panel.panel_id }}</a><span>›</span><span>Supplier comparison</span>{% endblock %}
+{% block content %}
+<div class="page-title-row"><div><h1>Supplier comparison</h1><p class="subtitle">{{ panel.panel_name }} — comparing {{ suppliers|length }} suppliers (read only)</p></div><a class="btn" href="{{ url_for('panel_view', panel_id=panel.panel_id) }}">Back to panel</a></div>
+<section class="table-card"><div class="table-scroll"><table class="data-table supplier-comparison"><thead><tr><th>Attribute</th>{% for s in suppliers %}<th><a href="{{ url_for('supplier_edit',panel_id=panel.panel_id,supplier_id=s.supplierId) }}">{{ s.supplierName }}</a><small>{{ s.supplierId }}</small></th>{% endfor %}</tr></thead><tbody>
+<tr><th>Supplier ID</th>{% for s in suppliers %}<td>{{ s.supplierId }}</td>{% endfor %}</tr>
+<tr><th>Supplier Name</th>{% for s in suppliers %}<td>{{ s.supplierName }}</td>{% endfor %}</tr>
+<tr><th>Address</th>{% for s in suppliers %}<td>{{ s.address }}</td>{% endfor %}</tr>
+<tr><th>Post Code</th>{% for s in suppliers %}<td>{{ s.postCode }}</td>{% endfor %}</tr>
+{% for f in fields %}<tr><th>{{ f.fieldName }}</th>{% for s in suppliers %}{% set value=s.customFields.get(f.fieldId) %}<td>
+{% if f.type=='stars' %}{{ stars(value) }}
+{% elif f.type=='boolean' %}<span class="boolean-block {{ 'boolean-yes' if value is sameas true else 'boolean-no' if value is sameas false else 'boolean-unset' }}">{{ 'Yes' if value is sameas true else 'No' if value is sameas false else 'Not assessed' }}</span>
+{% elif f.type=='multiselect_blocks' %}<div class="multi-block-display">{% for option in f.options %}<span class="multi-block-segment {{ 'multi-block-active' if option in (value or []) else 'multi-block-inactive' }}">{{ option }}</span>{% endfor %}</div>
+{% elif value is not none and value != '' %}{{ value }}{% else %}—{% endif %}</td>{% endfor %}</tr>{% endfor %}
+{% for w in widgets %}{% set idx=loop.index0 %}<tr><th>{{ w.title }} <small>Calculated</small></th>{% for s in suppliers %}{% set cell=calculated[s.supplierId][idx] %}<td>{% if cell.value is none %}—{% elif cell.format in ['stars','stars_both'] %}{{ stars(cell.value, cell.format=='stars_both') }}{% elif cell.format=='currency' %}{{ cell.currencyPrefix }}{{ '{:,.2f}'.format(cell.value) }}{% elif cell.format=='percentage' or cell.metric=='percentage' %}{{ '{:,.1f}'.format(cell.value) }}%{% else %}{{ '{:,.2f}'.format(cell.value) }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}
