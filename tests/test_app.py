@@ -1476,7 +1476,7 @@ def test_dev038_panel_scoring_saved_and_displayed(client):
     assert client.post("/panels/CMP-SCORE/suppliers/new",data={
         "supplier_id":"S1","supplier_name":"Supplier One","custom_rating":"4.5"
     }).status_code==302
-    page=client.get("/panels/CMP-SCORE")
+    page=client.get("/panels/CMP-SCORE?tab=scoring")
     assert b"Weighted supplier scores" in page.data
     assert b"4.5 / 5" in page.data
     invalid=client.post("/panels/CMP-SCORE/configuration",data={
@@ -1566,7 +1566,7 @@ def test_dev040_review_alert_classification_and_actions():
 
 def test_dev040_panel_renders_qualification_alerts(client):
     create_panel(client,"CMP-ALERT")
-    response=client.get("/panels/CMP-ALERT")
+    response=client.get("/panels/CMP-ALERT?tab=actions")
     assert response.status_code==200
     assert b"Qualification review alerts" in response.data
     assert b"No qualification reviews or actions require attention." in response.data
@@ -1593,7 +1593,7 @@ def test_dev041_coverage_concentration_and_qualification():
 
 def test_dev041_panel_coverage_renders_without_configured_regions(client):
     create_panel(client,"CMP-COVERAGE")
-    response=client.get("/panels/CMP-COVERAGE")
+    response=client.get("/panels/CMP-COVERAGE?tab=overview")
     assert response.status_code==200
     assert b"Supplier coverage and sourcing concentration" in response.data
     assert b"No multi-select coverage field is configured." in response.data
