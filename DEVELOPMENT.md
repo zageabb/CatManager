@@ -166,3 +166,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [x] Add supplier-specific actions with description, owner, due date and Open/In progress/Completed status. Provide create/update workflow and list, validate inputs, preserve records in panel JSON and append audit events. Regression tests, successful CI and merge to main required.
 
   - Evidence: supplier-scoped action form and list, creation/update with owner, due date, status and audit snapshots; archived panels are read-only. Behavioural tests passed in PR CI run 37834017837 on ee87994700c6c284289ac9f6d0958ce70491c0fd.
+
+### DEV-040 — Qualification review alerts
+- [ ] Surface existing qualification review dates as actionable per-supplier alerts (overdue, due within 30 days, later, missing or invalid), with links to edit supplier, plus overdue/open action due dates. Respect configured dashboard review field and preserve read-only data. Add tests and pass CI before merge.
