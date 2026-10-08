@@ -337,6 +337,73 @@
     const resultCount=supplierControls.querySelector(".supplier-results-count");
     const noMatches=document.querySelector(".supplier-no-matches");
     const normalise=v=>String(v==null?"":v).toLocaleLowerCase().trim();
+
+    const columnSettings=document.querySelector("[data-supplier-column-settings]");
+    const header=supplierTable.tHead.rows[0];
+    const headings=Array.from(header.cells);
+    const rowCells=new Map(rows.map(row=>[row,Array.from(row.cells)]));
+    const fixed=new Set([0,1,headings.length-1]);
+    const storageKey="catmanager:columns:"+supplierTable.dataset.panelId;
+    const initial=Array.from({length:headings.length},(_,i)=>i);
+    let columnOrder=initial.slice();
+    let hiddenColumns=new Set();
+    const originalCell=(row,i)=>rowCells.get(row)?.[i];
+    function restoreColumnPreferences(){
+      try{
+        const saved=JSON.parse(localStorage.getItem(storageKey)||"null");
+        if(!saved||!Array.isArray(saved.order))return;
+        const order=saved.order.filter(i=>Number.isInteger(i)&&i>=0&&i<headings.length);
+        if(order.length!==headings.length||new Set(order).size!==headings.length)return;
+        columnOrder=[0,1,...order.filter(i=>!fixed.has(i)),headings.length-1];
+        hiddenColumns=new Set((saved.hidden||[]).filter(i=>!fixed.has(i)&&Number.isInteger(i)&&i>=0&&i<headings.length));
+      }catch(_err){ /* Browser storage can be unavailable; defaults remain usable. */ }
+    }
+    function saveColumnPreferences(){
+      try{localStorage.setItem(storageKey,JSON.stringify({order:columnOrder,hidden:[...hiddenColumns]}));}
+      catch(_err){ /* Continue with this session's view when storage is unavailable. */ }
+    }
+    function renderColumns(){
+      columnOrder.forEach(i=>header.appendChild(headings[i]));
+      rows.forEach(row=>columnOrder.forEach(i=>row.appendChild(originalCell(row,i))));
+      headings.forEach((cell,i)=>{cell.hidden=hiddenColumns.has(i);});
+      rows.forEach(row=>rowCells.get(row).forEach((cell,i)=>{cell.hidden=hiddenColumns.has(i);}));
+      const holder=columnSettings?.querySelector(".supplier-column-options");
+      if(!holder)return;
+      holder.replaceChildren();
+      columnOrder.filter(i=>!fixed.has(i)).forEach(i=>{
+        const item=document.createElement("div");
+        item.className="supplier-column-option";
+        const toggle=document.createElement("input");
+        toggle.type="checkbox";toggle.checked=!hiddenColumns.has(i);
+        toggle.setAttribute("aria-label","Show "+headings[i].textContent.trim());
+        toggle.addEventListener("change",()=>{
+          if(toggle.checked)hiddenColumns.delete(i);else hiddenColumns.add(i);
+          saveColumnPreferences();renderColumns();
+        });
+        const name=document.createElement("span");
+        name.textContent=headings[i].textContent.trim();
+        const up=document.createElement("button"),down=document.createElement("button");
+        for(const [button,label,delta] of [[up,"Move up",-1],[down,"Move down",1]]){
+          button.type="button";button.className="btn compact";button.textContent=delta<0?"↑":"↓";
+          button.setAttribute("aria-label",label+" "+name.textContent);
+          const movable=columnOrder.filter(k=>!fixed.has(k));
+          button.disabled=movable.indexOf(i)+(delta)<0||movable.indexOf(i)+(delta)>=movable.length;
+          button.addEventListener("click",()=>{
+            const ix=columnOrder.indexOf(i),swap=columnOrder.indexOf(movable[movable.indexOf(i)+delta]);
+            [columnOrder[ix],columnOrder[swap]]=[columnOrder[swap],columnOrder[ix]];
+            saveColumnPreferences();renderColumns();applySupplierView();
+          });
+        }
+        item.append(toggle,name,up,down);holder.appendChild(item);
+      });
+    }
+    if(columnSettings){
+      columnSettings.querySelector(".supplier-column-reset").addEventListener("click",()=>{
+        columnOrder=initial.slice();hiddenColumns.clear();saveColumnPreferences();renderColumns();applySupplierView();
+      });
+      restoreColumnPreferences();renderColumns();
+    }
+
     function applySupplierView(){
       const needle=normalise(query.value);
       const filterIndex=filterField.value==="all"?null:Number(filterField.value);
@@ -344,14 +411,14 @@
       const sign=direction.value==="desc"?-1:1;
       const collator=new Intl.Collator(undefined,{numeric:true,sensitivity:"base"});
       const visible=rows.filter(row=>{
-        const cells=Array.from(row.cells).slice(0,-1);
+        const cells=rowCells.get(row).slice(0,-1);
         const candidates=filterIndex===null?cells:[cells[filterIndex]];
         const match=candidates.some(cell=>cell&&normalise(cell.dataset.filter??cell.textContent).includes(needle));
         row.hidden=!match;
         return match;
       });
       visible.sort((a,b)=>{
-        const ca=a.cells[sortIndex],cb=b.cells[sortIndex];
+        const ca=originalCell(a,sortIndex),cb=originalCell(b,sortIndex);
         if(!ca||!cb)return 0;
         const av=ca.dataset.sort||ca.dataset.filter||"";
         const bv=cb.dataset.sort||cb.dataset.filter||"";
