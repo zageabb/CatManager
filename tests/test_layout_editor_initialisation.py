@@ -65,3 +65,33 @@ def test_configuration_focused_panes_preserve_all_save_fields():
     assert 'pane.hidden=pane.id!==active' in js
     assert 'window.addEventListener("hashchange"' in js
     assert 'addEventListener("invalid"' in js
+
+
+def test_configuration_related_tools_are_outside_post_form():
+    html = (Path(__file__).resolve().parents[1] / "templates" / "panel_configuration.html").read_text()
+    assert html.index("</form>") < html.index('class="configuration-related-tools"')
+    for endpoint in ("panel_edit", "panel_template_list", "supplier_master_sync_preview",
+                     "panel_export", "panel_audit"):
+        assert "url_for('" + endpoint + "'" in html
+    assert "Save your configuration changes before leaving this page." in html
+
+
+def test_related_tool_routes_render_for_existing_panel(tmp_path):
+    from app import create_app
+    import json
+    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "related.sqlite"),
+                      "SEED_DEMO": False, "SECRET_KEY": "test"})
+    client = app.test_client()
+    response = client.post("/panels/new", data={
+        "panel_id":"TOOLS-001","panel_name":"Tools Panel","category":"Transformers",
+        "business":"GI","region_level":"Country","region_value":"United Kingdom",
+        "owner":"Test","mdf_codes":["MDF-TR-001"],"lead_mdf_code":"MDF-TR-001",
+        "fields_json":json.dumps([])
+    })
+    assert response.status_code == 302
+    html = client.get("/panels/TOOLS-001/configuration").get_data(as_text=True)
+    assert "/panels/TOOLS-001/edit" in html
+    assert "/panel-templates" in html
+    assert "/panels/TOOLS-001/suppliers/master-sync" in html
+    assert "/panels/TOOLS-001/export" in html
+    assert "/panels/TOOLS-001/audit" in html
