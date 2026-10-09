@@ -163,7 +163,7 @@
           button.textContent="Saved";
         }catch(error){button.textContent=error.message||"Save failed";button.disabled=false;}
       });
-      row.querySelector(".icon-delete").addEventListener("click",function(){fields.splice(index,1);renderFields();sync();});
+      row.querySelector(".icon-delete").addEventListener("click",function(){fields.splice(index,1);renderFields();renderLayout();sync();});
       row.addEventListener("dragstart",function(e){e.dataTransfer.setData("text/plain",String(index));});
       row.addEventListener("dragover",function(e){e.preventDefault();});
       row.addEventListener("drop",function(e){e.preventDefault();const from=Number(e.dataTransfer.getData("text/plain"));const moved=fields.splice(from,1)[0];fields.splice(index,0,moved);renderFields();sync();});
@@ -176,9 +176,9 @@
     const used=new Set(groups.map(function(g){return g.groupId;}));
     while(used.has(gid)){n+=1;gid="group_"+n;}
     groups.push({groupId:gid,name:"New group",order:groups.length+1});
-    renderGroups();renderFields();sync();
+    renderGroups();renderFields();renderLayout();sync();
   });
-  renderGroups();renderFields();sync();
+  renderGroups();renderFields();renderLayout();sync();
 
 
   const widgetRoot=document.querySelector("#dashboard-widgets");
