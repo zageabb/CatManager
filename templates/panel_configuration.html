@@ -43,4 +43,16 @@
 <section class="configuration-pane" id="configuration-scoring" aria-label="Weighted scoring"><div class="field-group-editor"><h2>Weighted Supplier Scoring</h2><p class="help-text">Select star or numeric assessment fields rated 0–5. Set relative weights (e.g. Quality 60, Delivery 40). A supplier without all ratings shows Incomplete, rather than a misleading total.</p><div id="scoring-rules" data-fields='{{ core.get("supplierFields", [])|tojson|forceescape }}'></div><button type="button" class="btn" id="add-scoring-rule">+ Add scoring criterion</button><input type="hidden" id="scoring-criteria-json" name="scoring_criteria_json" value="{{ core.get('scoringCriteria', [])|tojson|forceescape }}"></div></section>
   <div class="form-actions"><a class="btn" href="{{ url_for('panel_view', panel_id=panel.panel_id) }}">Cancel</a><button class="btn primary" type="submit">Save Configuration</button></div>
 </form>
+<section class="configuration-related-tools" aria-labelledby="configuration-related-heading">
+  <div class="configuration-related-heading">
+    <div><h2 id="configuration-related-heading">Related administration tools</h2><p>These open separate workflows. Save your configuration changes before leaving this page.</p></div>
+  </div>
+  <div class="configuration-related-links">
+    <a href="{{ url_for('panel_edit', panel_id=panel.panel_id) }}">Panel details <span aria-hidden="true">↗</span></a>
+    <a href="{{ url_for('panel_template_list') }}">Template library <span aria-hidden="true">↗</span></a>
+    {% if not panel.archived_at %}<a href="{{ url_for('supplier_master_sync_preview', panel_id=panel.panel_id) }}">Supplier master sync <span aria-hidden="true">↗</span></a>{% endif %}
+    <a href="{{ url_for('panel_export', panel_id=panel.panel_id) }}">Export panel JSON <span aria-hidden="true">↗</span></a>
+    <a href="{{ url_for('panel_audit', panel_id=panel.panel_id) }}">Audit history <span aria-hidden="true">↗</span></a>
+  </div>
+</section>
 {% endblock %}
