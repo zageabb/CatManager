@@ -229,3 +229,11 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 ### UX-052 implementation — in progress
 - [x] Replace crowded supplier-row buttons with an accessible actions menu, keep comparisons, filtering, sorting and column preferences, and improve responsive wide-table controls. Preserve deletion confirmation, CSRF, and all existing actions. Verify CI and merge only when green.
   - Evidence: supplier row contextual menu with Edit, Actions, History, Cross-panel Profile, and safeguarded Delete; responsive table scroll, clearer search/filter controls, and Esc/outside-click dismissal. Preserved comparison and browser column settings. All 82 tests passed in PR CI 37898627208 at c7708bd353e5636a1ec613b2f0dd9255e10f5e65. UX-053–054 remain planned.
+
+
+### DEV-050 — Moveable and groupable fixed supplier fields
+- [ ] Extend Panel Configuration so fixed fields (Supplier ID, Supplier Name, Address, Post Code) can be assigned to any existing/new field group or Ungrouped, and reordered alongside custom fields with accessible move controls. Fixed fields remain mandatory, non-deletable, and retain immutable storage keys and supplier-master semantics.
+- [ ] Introduce a single panel-level display layout (stable references distinguishing fixed-field keys from custom field IDs), with a backward-compatible migration/default for existing panels, JSON imports/exports, duplicated panels, and reusable panel templates. Never change supplier data or audit history during layout migration.
+- [ ] Apply the configured group/order consistently to supplier create/edit forms and grouped bulk editing where applicable. Preserve existing supplier list column preferences and protected identity/action columns; avoid inadvertently changing supplier-master sync and Excel round-trip behaviour.
+- [ ] Include validation for unknown/duplicate field references, deleted custom fields, deleted/reordered groups, and accessible movement; add migration and behavioural regression tests. Update AGENTS.md only if new architectural rules are introduced, then run pytest and commit-specific CI before marking complete.
+  - Product intent: treat fixed fields as fixed **data definitions**, not fixed **visual positions**. In legacy configurations, display fixed fields first in their existing order, followed by custom fields, until explicitly reordered.
