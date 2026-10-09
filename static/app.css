@@ -204,3 +204,49 @@
 .supplier-row-dropdown a:hover,.supplier-row-dropdown button:hover{background:#f1f4f9}
 .supplier-row-dropdown .supplier-delete-action{color:#b22d48;border-top:1px solid #e6e8ef}
 @media(max-width:760px){.supplier-workspace-controls{gap:8px}.supplier-workspace-controls label{flex:1 1 140px}.supplier-workspace-scroll{scrollbar-gutter:auto}}
+
+
+/* Fixed/custom field placement: five dedicated columns, never the six-column
+   custom-definition grid. Keep move buttons aligned and equally sized. */
+#field-layout-editor .layout-field-row {
+  display:grid;
+  grid-template-columns:minmax(240px, 1fr) 72px minmax(165px, 220px) 36px 36px;
+  gap:10px;
+  align-items:center;
+}
+#field-layout-editor .layout-field-row > strong {
+  min-width:0;
+  overflow-wrap:anywhere;
+  font-size:13px;
+  line-height:1.4;
+}
+#field-layout-editor .layout-field-row > .field-type {
+  white-space:nowrap;
+}
+#field-layout-editor .layout-field-row > .layout-group {
+  width:100%;
+  min-width:0;
+}
+#field-layout-editor .layout-field-row > .layout-up,
+#field-layout-editor .layout-field-row > .layout-down {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:36px;
+  height:34px;
+  min-height:34px;
+  padding:0;
+  line-height:1;
+  box-sizing:border-box;
+}
+@media(max-width:720px) {
+  #field-layout-editor .layout-field-row {
+    grid-template-columns:minmax(0, 1fr) 64px 36px 36px;
+    gap:8px;
+  }
+  #field-layout-editor .layout-field-row > strong {grid-column:1;grid-row:1;}
+  #field-layout-editor .layout-field-row > .field-type {grid-column:2;grid-row:1;}
+  #field-layout-editor .layout-field-row > .layout-group {grid-column:1 / 3;grid-row:2;}
+  #field-layout-editor .layout-field-row > .layout-up {grid-column:3;grid-row:2;}
+  #field-layout-editor .layout-field-row > .layout-down {grid-column:4;grid-row:2;}
+}
