@@ -1750,7 +1750,7 @@ def test_dev045_supplier_profile_joins_exact_id_across_panels(client):
     assert "CMP-PROFILE-A" in page and "CMP-PROFILE-B" in page
     assert "CMP-PROFILE-C" not in page
     assert "Example Trading" in page
-    assert "Profile" in client.get("/panels/CMP-PROFILE-A").get_data(as_text=True)
+    assert "Cross-panel profile" in client.get("/panels/CMP-PROFILE-A").get_data(as_text=True)
     assert client.get("/api/panels/CMP-PROFILE-A").get_json()==before_a
     assert client.get("/suppliers/UNKNOWN/profile").status_code==404
 
