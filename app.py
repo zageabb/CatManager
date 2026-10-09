@@ -1140,7 +1140,7 @@ def create_app(test_config=None):
             return redirect(url_for("panel_view",panel_id=panel_id))
         core=panel["data"]["panel"]
         snapshot={k:json.loads(json.dumps(core.get(k,[]))) for k in
-                  ("fieldGroups","supplierFields","dashboardWidgets","scoringCriteria")}
+                  ("fieldGroups","supplierFields","fieldLayout","dashboardWidgets","scoringCriteria")}
         get_db().execute("INSERT INTO panel_templates(template_id,name,config_json,source_panel_id,created_at) VALUES(?,?,?,?,?)",
                          (str(uuid4()),name,json.dumps(snapshot),panel_id,now_iso()))
         get_db().commit()
