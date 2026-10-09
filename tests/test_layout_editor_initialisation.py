@@ -48,3 +48,20 @@ def test_configuration_section_navigation_preserves_single_form():
     assert 'id="configuration-widgets"' in html
     assert 'data-csrf-token=' in html
     assert '@media(max-width:850px)' in css
+
+
+def test_configuration_focused_panes_preserve_all_save_fields():
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "templates" / "panel_configuration.html").read_text()
+    js = (root / "static" / "app.js").read_text()
+    for section in ("fields", "widgets", "scoring"):
+        assert 'class="configuration-pane" id="configuration-' + section + '"' in html
+        assert 'href="#configuration-' + section + '"' in html
+    assert 'data-config-navigation' in html
+    assert html.count('id="panel-form"') == 1
+    assert 'name="field_layout_json"' in html
+    assert 'name="dashboard_widgets_json"' in html
+    assert 'name="scoring_criteria_json"' in html
+    assert 'pane.hidden=pane.id!==active' in js
+    assert 'window.addEventListener("hashchange"' in js
+    assert 'addEventListener("invalid"' in js
