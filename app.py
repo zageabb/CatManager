@@ -45,6 +45,38 @@ DEFAULT_MDF_CODES = [
     {"code": "MDF-CE-001", "description": "Civil Engineering"},
 ]
 
+FIXED_FIELD_KEYS = ("supplierId", "supplierName", "address", "postCode")
+
+def normalise_field_layout(raw, fields, groups):
+    """Validate visual layout, leaving all supplier/master storage keys unchanged."""
+    if not isinstance(raw, list):
+        raise ValueError("Field layout must be a list.")
+    expected = ["fixed:" + key for key in FIXED_FIELD_KEYS] + [
+        "custom:" + field["fieldId"] for field in fields
+    ]
+    group_ids = {group["groupId"] for group in groups}
+    found = set()
+    cleaned = []
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ValueError("Invalid field layout item.")
+        ref = str(item.get("ref", ""))
+        gid = str(item.get("groupId") or "")
+        if ref not in expected or ref in found:
+            raise ValueError("Field layout contains unknown or duplicate fields.")
+        if gid and gid not in group_ids:
+            raise ValueError("Field layout references an unknown group.")
+        found.add(ref)
+        cleaned.append({"ref": ref, "groupId": gid})
+    if found != set(expected):
+        raise ValueError("Field layout must include every fixed and custom field exactly once.")
+    return cleaned
+
+def default_field_layout(fields):
+    return ([{"ref": "fixed:" + key, "groupId": ""} for key in FIXED_FIELD_KEYS] +
+            [{"ref": "custom:" + field["fieldId"], "groupId": field.get("groupId", "")}
+             for field in fields])
+
 def now_iso():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -613,6 +645,7 @@ def create_app(test_config=None):
                         field["groupId"] = ""
             else:
                 raise ValueError("Custom fields reference unknown field groups: " + ", ".join(unknown_groups))
+        core["fieldLayout"] = normalise_field_layout(core.get("fieldLayout", default_field_layout(core["supplierFields"])), core["supplierFields"], core["fieldGroups"])
         core["dashboardWidgets"] = parse_dashboard_widgets(json.dumps(core.get("dashboardWidgets", [])), core["supplierFields"])
         if not isinstance(core.get("suppliers"), list):
             raise ValueError("suppliers must be a list.")
@@ -1202,14 +1235,14 @@ def create_app(test_config=None):
 
         payload = build_panel_payload(panel_id,panel_name,category,business,region_level,value,owner,mdf_codes,lead_mdf_code,field_groups,fields,suppliers,created_at,existing_metadata)
         if existing:
-            for config_key in ("dashboardWidgets","scoringCriteria"):
+            for config_key in ("dashboardWidgets","scoringCriteria","fieldLayout"):
                 if config_key in existing["data"]["panel"]:
                     payload["panel"][config_key] = json.loads(json.dumps(existing["data"]["panel"][config_key]))
         if source:
             # A duplicate is a fresh aggregate: no supplier records, history or orphaned values.
             # Carry over optional panel configuration such as future KPI widget definitions.
             source_core = source["data"]["panel"]
-            for key in ("dashboardWidgets","scoringCriteria"):
+            for key in ("dashboardWidgets","scoringCriteria","fieldLayout"):
                 if key in source_core:
                     payload["panel"][key] = json.loads(json.dumps(source_core[key]))
             payload["panel"]["suppliers"] = []
@@ -1250,6 +1283,7 @@ def create_app(test_config=None):
             field_groups = parse_field_groups(request.form.get("field_groups_json","[]"))
             fields = parse_fields(request.form.get("fields_json","[]"))
             group_ids = {g["groupId"] for g in field_groups}
+            layout = normalise_field_layout(json.loads(request.form.get("field_layout_json", json.dumps(core.get("fieldLayout", default_field_layout(fields))))), fields, field_groups)
             widgets = parse_dashboard_widgets(request.form.get("dashboard_widgets_json", json.dumps(core.get("dashboardWidgets", []))), fields)
             scoring = validate_scoring(json.loads(request.form.get("scoring_criteria_json", json.dumps(core.get("scoringCriteria", [])))), fields)
             unknown_groups = sorted({f["groupId"] for f in fields if f.get("groupId") and f["groupId"] not in group_ids})
@@ -1309,6 +1343,7 @@ def create_app(test_config=None):
         before = json.loads(json.dumps(panel["data"]))
         core["fieldGroups"] = field_groups
         core["supplierFields"] = fields
+        core["fieldLayout"] = layout
         core["dashboardWidgets"] = widgets
         core["scoringCriteria"] = scoring
         changes = panel_change_summary(before, data)
@@ -1371,6 +1406,8 @@ def create_app(test_config=None):
             changes["dashboardWidgets"] = {"label": "Dashboard widgets",
                                             "before": before_core.get("dashboardWidgets", []),
                                             "after": after_core.get("dashboardWidgets", [])}
+        if before_core.get("fieldLayout", []) != after_core.get("fieldLayout", []):
+            changes["fieldLayout"] = {"label":"Supplier field layout", "before":before_core.get("fieldLayout", []), "after":after_core.get("fieldLayout", [])}
         if before_core.get("fieldGroups", []) != after_core.get("fieldGroups", []):
             changes["fieldGroups"] = {
                 "label": "Field groups",
