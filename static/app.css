@@ -309,3 +309,12 @@
   .configuration-nav-card {padding:12px}
   .configuration-pane {overflow-wrap:break-word}
 }
+
+/* Related administration is navigation, not part of the configuration POST. */
+.configuration-related-tools {margin:20px 0 28px;padding:18px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.configuration-related-heading h2 {margin:0 0 5px;font-size:16px}
+.configuration-related-heading p {margin:0 0 14px;color:var(--muted);font-size:12px}
+.configuration-related-links {display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:9px}
+.configuration-related-links a {display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fafbfd;text-decoration:none;color:inherit;font-size:13px;font-weight:600}
+.configuration-related-links a:hover,.configuration-related-links a:focus-visible {border-color:#bb8ca9;background:#faf2f7}
+.configuration-related-links span {color:var(--muted)}
