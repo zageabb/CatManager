@@ -641,6 +641,32 @@
   document.querySelectorAll(".supplier-workspace-scroll").forEach(table=>table.addEventListener("scroll",()=>closeSupplierMenus(),{passive:true}));
   window.addEventListener("resize",()=>closeSupplierMenus());
 
+
+  // Progressive configuration workspace: no inputs are disabled or discarded when a
+  // pane is hidden, so the existing unified Save Configuration remains authoritative.
+  const configNav=document.querySelector("[data-config-navigation]");
+  if(configNav){
+    const links=[...configNav.querySelectorAll('a[href^="#configuration-"]')];
+    const panes=links.map(link=>document.getElementById(link.hash.slice(1)));
+    if(panes.every(Boolean)){
+      const selectPane=(id)=>{
+        const active=panes.some(pane=>pane.id===id)?id:panes[0].id;
+        panes.forEach(pane=>{pane.hidden=pane.id!==active;});
+        links.forEach(link=>{
+          if(link.hash==="#"+active)link.setAttribute("aria-current","location");
+          else link.removeAttribute("aria-current");
+        });
+      };
+      selectPane(location.hash.slice(1));
+      links.forEach(link=>link.addEventListener("click",()=>selectPane(link.hash.slice(1))));
+      window.addEventListener("hashchange",()=>selectPane(location.hash.slice(1)));
+      document.querySelector("#panel-form")?.addEventListener("invalid",event=>{
+        const pane=event.target.closest(".configuration-pane");
+        if(pane&&pane.hidden){selectPane(pane.id);pane.hidden=false;}
+      },true);
+    }
+  }
+
   document.querySelectorAll("[data-copy]").forEach(function(btn){
     btn.addEventListener("click",async function(){const el=document.querySelector(btn.dataset.copy);if(!el)return;await navigator.clipboard.writeText(el.value||el.textContent||"");const old=btn.textContent;btn.textContent="Copied";setTimeout(function(){btn.textContent=old;},1200);});
   });
