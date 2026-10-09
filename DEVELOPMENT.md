@@ -225,3 +225,6 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 ### UX-051 implementation — in progress
 - [x] Reorder supplier content first, add tab navigation, keep edit/configuration/add supplier and move secondary actions to grouped menu; preserve existing endpoints, tests, and CI.
   - Evidence: supplier list and compact configured KPI strip default, header Edit Panel / Panel Configuration / Add Supplier, grouped actions overflow, and Overview, Dashboard, Scoring, Actions, History server-selected tabs. Existing KPI/scoring/coverage regression tests were redirected to relevant tab; all tests passed in CI run 37855882265 on ed640a8a189d1df485ac465cce27c040adb0f807. UX-052–054 remain future stages.
+
+### UX-052 implementation — in progress
+- [ ] Replace crowded supplier-row buttons with an accessible actions menu, keep comparisons, filtering, sorting and column preferences, and improve responsive wide-table controls. Preserve deletion confirmation, CSRF, and all existing actions. Verify CI and merge only when green.
