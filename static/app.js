@@ -71,7 +71,7 @@
         '<select class="layout-group" aria-label="Group for '+esc(label)+'">'+groupOptions(item.groupId)+'</select>'+
         '<button type="button" class="btn compact layout-up" aria-label="Move '+esc(label)+' up" '+(index===0?"disabled":"")+'>↑</button>'+
         '<button type="button" class="btn compact layout-down" aria-label="Move '+esc(label)+' down" '+(index===fieldLayout.length-1?"disabled":"")+'>↓</button>';
-      row.querySelector(".layout-group").addEventListener("change",e=>{item.groupId=e.target.value;sync();});
+      row.querySelector(".layout-group").addEventListener("change",e=>{item.groupId=e.target.value;const field=fields.find(f=>"custom:"+f.fieldId===item.ref);if(field){field.groupId=e.target.value;renderFields();}sync();});
       row.querySelector(".layout-up").addEventListener("click",()=>{[fieldLayout[index-1],fieldLayout[index]]=[fieldLayout[index],fieldLayout[index-1]];renderLayout();sync();});
       row.querySelector(".layout-down").addEventListener("click",()=>{[fieldLayout[index],fieldLayout[index+1]]=[fieldLayout[index+1],fieldLayout[index]];renderLayout();sync();});
       layoutRoot.appendChild(row);
@@ -100,9 +100,9 @@
         '<button type="button" class="btn compact group-up" '+(index===0?"disabled":"")+'>↑</button>'+
         '<button type="button" class="btn compact group-down" '+(index===groups.length-1?"disabled":"")+'>↓</button>'+
         '<button type="button" class="btn compact danger group-delete">Delete</button></div>';
-      row.querySelector(".group-name").addEventListener("input",function(e){groups[index].name=e.target.value;renderFields();sync();});
+      row.querySelector(".group-name").addEventListener("input",function(e){groups[index].name=e.target.value;renderFields();renderLayout();sync();});
       row.querySelector(".group-up").addEventListener("click",function(){if(index<1)return;const moved=groups.splice(index,1)[0];groups.splice(index-1,0,moved);renderGroups();renderFields();renderLayout();sync();});
-      row.querySelector(".group-down").addEventListener("click",function(){if(index>=groups.length-1)return;const moved=groups.splice(index,1)[0];groups.splice(index+1,0,moved);renderGroups();renderFields();sync();});
+      row.querySelector(".group-down").addEventListener("click",function(){if(index>=groups.length-1)return;const moved=groups.splice(index,1)[0];groups.splice(index+1,0,moved);renderGroups();renderFields();renderLayout();sync();});
       row.querySelector(".group-delete").addEventListener("click",function(){
         const gid=g.groupId;
         fields.forEach(function(field){if(field.groupId===gid)field.groupId="";});
@@ -147,7 +147,7 @@
         if(!["dropdown","multiselect_blocks"].includes(e.target.value))fields[index].options=[];
         renderFields();sync();
       });
-      row.querySelector(".field-group").addEventListener("change",function(e){fields[index].groupId=e.target.value;sync();});
+      row.querySelector(".field-group").addEventListener("change",function(e){fields[index].groupId=e.target.value;const item=fieldLayout.find(item=>item.ref==="custom:"+fields[index].fieldId);if(item)item.groupId=e.target.value;renderLayout();sync();});
       row.querySelector(".field-options").addEventListener("input",function(e){fields[index].options=e.target.value.split(",").map(function(x){return x.trim();}).filter(Boolean);sync();});
       row.querySelector(".required-toggle input").addEventListener("change",function(e){fields[index].required=e.target.checked;sync();});
       row.querySelector(".save-template").addEventListener("click",async function(){
