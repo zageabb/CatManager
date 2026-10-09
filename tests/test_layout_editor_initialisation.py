@@ -12,3 +12,10 @@ def test_configuration_exposes_layout_editor():
     html = (Path(__file__).resolve().parents[1] / "templates" / "panel_configuration.html").read_text()
     assert 'id="field-layout-editor"' in html
     assert 'name="field_layout_json"' in html
+
+
+def test_fixed_group_change_updates_current_layout_entry():
+    js = (Path(__file__).resolve().parents[1] / "static" / "app.js").read_text()
+    assert 'const current=fieldLayout.find(entry=>entry.ref===item.ref)' in js
+    assert 'if(current)current.groupId=e.target.value' in js
+    assert 'item.groupId=e.target.value;const field=fields.find' not in js
