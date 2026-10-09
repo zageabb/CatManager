@@ -66,7 +66,7 @@
       const field=fields.find(f=>"custom:"+f.fieldId===item.ref);
       const label=item.ref.startsWith("fixed:")?fixedLabels[item.ref.slice(6)]:(field?.fieldName||item.ref);
       const row=document.createElement("div");
-      row.className="field-row";
+      row.className="field-row layout-field-row";
       row.innerHTML='<strong>'+esc(label)+'</strong><span class="field-type">'+(item.ref.startsWith("fixed:")?"Fixed":"Custom")+'</span>'+
         '<select class="layout-group" aria-label="Group for '+esc(label)+'">'+groupOptions(item.groupId)+'</select>'+
         '<button type="button" class="btn compact layout-up" aria-label="Move '+esc(label)+' up" '+(index===0?"disabled":"")+'>↑</button>'+
