@@ -243,3 +243,5 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
   - UX correction (2026-10-09): fixed/custom placement editor brought directly below field groups so Supplier ID/BPID, Supplier Name, Address and Post Code have visible group selectors; custom-field group selector and layout selector are synchronised (fd043296). Verification of full CI remains outstanding.
 
   - BUG FIX (2026-10-09): the placement editor initially appeared empty because the page-load initialisation invoked renderGroups/renderFields but omitted renderLayout. Restored renderLayout at initialisation and group creation, added regression test. Commit eed6ed7a; CI pending.
+
+  - BUG FIX (2026-10-09): selecting a fixed field group updated a stale layout object after reconcileLayout rebuilt the array, so saving silently retained Ungrouped. The change handler now looks up the current entry by stable ref before synchronising. Added a regression guard (d587739c). Full CI not yet verified.
