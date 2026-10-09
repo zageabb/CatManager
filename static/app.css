@@ -250,3 +250,45 @@
   #field-layout-editor .layout-field-row > .layout-up {grid-column:3;grid-row:2;}
   #field-layout-editor .layout-field-row > .layout-down {grid-column:4;grid-row:2;}
 }
+
+/* UX-053: low-risk navigation across the existing unified configuration form. */
+.configuration-navigation {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+  margin:16px 0 10px;
+}
+.configuration-nav-card {
+  display:grid;
+  grid-template-columns:36px minmax(0,1fr);
+  column-gap:10px;
+  align-items:center;
+  padding:16px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:#fff;
+  color:inherit;
+  text-decoration:none;
+  box-shadow:0 2px 8px rgba(20,35,50,.035);
+}
+.configuration-nav-card:hover,.configuration-nav-card:focus-visible {
+  border-color:#b9a3b0;
+  background:#faf8fa;
+  outline-offset:3px;
+}
+.configuration-nav-icon {
+  grid-row:span 2;
+  display:grid;
+  place-items:center;
+  width:36px;
+  height:36px;
+  border-radius:8px;
+  background:#f2edf3;
+  color:#754863;
+  font-size:19px;
+}
+.configuration-nav-card strong {font-size:14px;line-height:1.4}
+.configuration-nav-card small {color:var(--muted);font-size:12px;line-height:1.4}
+.configuration-save-note {font-size:12px;color:var(--muted);margin:0 0 12px}
+#configuration-fields,#configuration-widgets,#configuration-scoring {scroll-margin-top:95px}
+@media(max-width:850px) {.configuration-navigation {grid-template-columns:1fr}}
