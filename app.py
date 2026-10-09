@@ -108,6 +108,7 @@ def create_app(test_config=None):
         REQUIRE_STRONG_SECRET=os.environ.get("CATMANAGER_REQUIRE_STRONG_SECRET", "0") == "1",
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_NAME="catmanager_session",
     )
     if test_config:
         app.config.update(test_config)

@@ -18,7 +18,7 @@ An item is complete only when the source is present, relevant tests pass, and CI
 - [x] DEV-008 Automated tests and GitHub Actions CI.
 
 ## V1 next development
-- [x] OPS-050 UDA reverse-proxy path-prefix compatibility through Werkzeug ProxyFix. UDA remains the authentication and authorization boundary; CatManager trusts only the headers supplied by the local ingress deployment. Verified with the CatManager application test suite.
+- [x] OPS-050 UDA reverse-proxy path-prefix compatibility through Werkzeug ProxyFix and a distinct `catmanager_session` cookie that cannot overwrite UDA authentication. UDA remains the authentication and authorization boundary; CatManager trusts only the headers supplied by the local ingress deployment. Verified with the CatManager application test suite.
 - [x] DEV-009 Supplier edit and delete with exact-ID confirmation and audit-safe snapshots.
   - Evidence: supplier edit/delete routes in `app.py`, edit/delete controls in `panel_view.html`, audit trail snapshots in panel metadata, behavioural tests.
 - [x] DEV-009A Existing supplier maintenance after panel-field changes, using two edit methods.
