@@ -8,7 +8,7 @@
 </div>
 <form method="post" class="form-card" id="panel-form" data-unsaved-guard>
   <div class="section-heading">
-    <div><h2>Supplier data definition</h2><p>Fixed supplier fields are always present. Add, group and reorder panel-specific custom fields below.</p></div>
+    <div><h2>Supplier data definition</h2><p>Fixed and custom fields can be assigned to groups and reordered. Fixed fields cannot be removed.</p></div>
     <div class="actions"><button class="btn" type="button" id="add-group">+ Add group</button><button class="btn" type="button" id="add-field">+ Add custom field</button><select id="template-selector" aria-label="Predefined field"><option value="">Select predefined field…</option></select><button class="btn" type="button" id="add-template-field">+ Use predefined</button></div>
   </div>
   <div class="field-group-editor">
@@ -16,11 +16,10 @@
     <div id="field-groups"></div>
   </div>
   <div class="field-list">
-    {% for fixed in ['Supplier ID','Supplier Name','Address','Post Code'] %}
-      <div class="field-row fixed"><span class="drag">☰</span><strong>{{ fixed }}</strong><span class="field-type">Fixed</span></div>
-    {% endfor %}
     <div id="custom-fields"></div><small class="help-text">Save any field to the reusable library from its row. Adding a predefined field creates an independent, editable copy.</small>
   </div>
+  <div class="field-group-editor"><div class="field-group-editor-head"><strong>Form display order</strong><span>Move any fixed or custom field up/down and choose its group. Group sections follow the group order above.</span></div><div id="field-layout-editor"></div></div>
+  <input type="hidden" id="field-layout-json" name="field_layout_json" value="{{ core.get('fieldLayout', [])|tojson|forceescape }}">
   <input type="hidden" id="field-groups-json" name="field_groups_json" value="{{ core.get('fieldGroups', [])|tojson|forceescape }}">
   <input type="hidden" id="fields-json" name="fields_json" value="{{ core.get('supplierFields', [])|tojson|forceescape }}">
   <div class="section-heading"><div><h2>Dashboard Widgets</h2><p>Display up to six supplier KPIs above the supplier table. Choose a source custom field, calculation (Average / Minimum / Maximum for ratings), and output as stars, number or both. Ratio still uses Sum(Field) ÷ Sum(Other field).</p></div><button class="btn" type="button" id="add-widget">+ Add KPI</button></div>
