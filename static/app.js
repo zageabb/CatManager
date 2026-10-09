@@ -35,11 +35,50 @@
     if(!t)return;
     fields.push({fieldId:nextFieldId(t.fieldName),fieldName:t.fieldName,type:t.type,
       options:(t.options||[]).slice(),required:!!t.required,groupId:""});
-    renderFields();sync();
+    renderFields();renderLayout();sync();
   });
   loadFieldTemplates();
 
+
+  const layoutRoot=document.querySelector("#field-layout-editor");
+  const layoutHidden=document.querySelector("#field-layout-json");
+  const fixedLabels={supplierId:"Supplier ID / BPID",supplierName:"Supplier Name",address:"Address",postCode:"Post Code"};
+  let fieldLayout=parseValue(layoutHidden);
+  function reconcileLayout(){
+    const valid=["supplierId","supplierName","address","postCode"].map(k=>"fixed:"+k).concat(fields.map(f=>"custom:"+f.fieldId));
+    const previous=new Set(),clean=[];
+    fieldLayout.forEach(item=>{
+      if(valid.includes(item.ref) && !previous.has(item.ref)){
+        clean.push({ref:item.ref,groupId:groups.some(g=>g.groupId===item.groupId)?item.groupId:""});
+        previous.add(item.ref);
+      }
+    });
+    valid.forEach(ref=>{if(!previous.has(ref)){
+      const f=fields.find(f=>"custom:"+f.fieldId===ref);
+      clean.push({ref,groupId:f?.groupId||""});
+    }});
+    fieldLayout=clean;
+  }
+  function renderLayout(){
+    if(!layoutRoot)return;
+    reconcileLayout();layoutRoot.innerHTML="";
+    fieldLayout.forEach((item,index)=>{
+      const field=fields.find(f=>"custom:"+f.fieldId===item.ref);
+      const label=item.ref.startsWith("fixed:")?fixedLabels[item.ref.slice(6)]:(field?.fieldName||item.ref);
+      const row=document.createElement("div");
+      row.className="field-row";
+      row.innerHTML='<strong>'+esc(label)+'</strong><span class="field-type">'+(item.ref.startsWith("fixed:")?"Fixed":"Custom")+'</span>'+
+        '<select class="layout-group" aria-label="Group for '+esc(label)+'">'+groupOptions(item.groupId)+'</select>'+
+        '<button type="button" class="btn compact layout-up" aria-label="Move '+esc(label)+' up" '+(index===0?"disabled":"")+'>↑</button>'+
+        '<button type="button" class="btn compact layout-down" aria-label="Move '+esc(label)+' down" '+(index===fieldLayout.length-1?"disabled":"")+'>↓</button>';
+      row.querySelector(".layout-group").addEventListener("change",e=>{item.groupId=e.target.value;sync();});
+      row.querySelector(".layout-up").addEventListener("click",()=>{[fieldLayout[index-1],fieldLayout[index]]=[fieldLayout[index],fieldLayout[index-1]];renderLayout();sync();});
+      row.querySelector(".layout-down").addEventListener("click",()=>{[fieldLayout[index],fieldLayout[index+1]]=[fieldLayout[index+1],fieldLayout[index]];renderLayout();sync();});
+      layoutRoot.appendChild(row);
+    });
+  }
   function sync(){
+    if(layoutHidden){reconcileLayout();layoutHidden.value=JSON.stringify(fieldLayout);}
     if(hidden)hidden.value=JSON.stringify(fields.map(function(f,i){f.order=i+1;return f;}));
     if(groupHidden)groupHidden.value=JSON.stringify(groups.map(function(g,i){g.order=i+1;return g;}));
   }
@@ -62,13 +101,14 @@
         '<button type="button" class="btn compact group-down" '+(index===groups.length-1?"disabled":"")+'>↓</button>'+
         '<button type="button" class="btn compact danger group-delete">Delete</button></div>';
       row.querySelector(".group-name").addEventListener("input",function(e){groups[index].name=e.target.value;renderFields();sync();});
-      row.querySelector(".group-up").addEventListener("click",function(){if(index<1)return;const moved=groups.splice(index,1)[0];groups.splice(index-1,0,moved);renderGroups();renderFields();sync();});
+      row.querySelector(".group-up").addEventListener("click",function(){if(index<1)return;const moved=groups.splice(index,1)[0];groups.splice(index-1,0,moved);renderGroups();renderFields();renderLayout();sync();});
       row.querySelector(".group-down").addEventListener("click",function(){if(index>=groups.length-1)return;const moved=groups.splice(index,1)[0];groups.splice(index+1,0,moved);renderGroups();renderFields();sync();});
       row.querySelector(".group-delete").addEventListener("click",function(){
         const gid=g.groupId;
         fields.forEach(function(field){if(field.groupId===gid)field.groupId="";});
+        fieldLayout.forEach(item=>{if(item.groupId===gid)item.groupId="";});
         groups.splice(index,1);
-        renderGroups();renderFields();sync();
+        renderGroups();renderFields();renderLayout();sync();
       });
       groupRoot.appendChild(row);
     });
