@@ -20,50 +20,77 @@
     {% endif %}
   </td>
 {% endmacro %}
+{% macro fixed_cell(s, key) %}
+  <td class="readonly-cell">
+    {% if key=='supplierId' %}<a class="panel-link" href="{{ url_for('supplier_edit', panel_id=panel.panel_id, supplier_id=s.supplierId) }}">{{ s.supplierId }}</a>
+    {% elif key=='supplierName' %}{{ s.supplierName }}
+    {% elif key=='address' %}{{ s.address }}
+    {% elif key=='postCode' %}{{ s.postCode }}{% endif %}
+  </td>
+{% endmacro %}
+{% macro render_cells(s, items, fields) %}
+  {% for item in items %}
+    {% if item.ref.startswith('fixed:') %}{{ fixed_cell(s,item.ref[6:]) }}
+    {% else %}{% for f in fields if f.fieldId == item.ref[7:] %}{{ edit_cell(s,f) }}{% endfor %}{% endif %}
+  {% endfor %}
+{% endmacro %}
+{% macro render_headers(items, fields) %}
+  {% for item in items %}
+    {% if item.ref.startswith('fixed:') %}
+      {% set key=item.ref[6:] %}
+      <th>{{ {'supplierId':'Supplier ID','supplierName':'Supplier Name','address':'Address','postCode':'Post Code'}.get(key,key) }}<small>Fixed · read-only</small></th>
+    {% else %}
+      {% for f in fields if f.fieldId == item.ref[7:] %}<th>{{ f.fieldName }}<small>{{ f.type|capitalize }}</small></th>{% endfor %}
+    {% endif %}
+  {% endfor %}
+{% endmacro %}
 {% block content %}
 {% set core=panel.data.panel %}
-{% set group_ids = core.get('fieldGroups', [])|map(attribute='groupId')|list %}
-{% set ungrouped = [] %}
-{% for f in core.supplierFields|sort(attribute='order') %}
-  {% if not f.get('groupId') or f.get('groupId') not in group_ids %}{% set _ = ungrouped.append(f) %}{% endif %}
+{% set ns=namespace(layout=[], ungrouped=[]) %}
+{% if core.get('fieldLayout') %}
+  {% set ns.layout=core.fieldLayout %}
+{% else %}
+  {% for key in ['supplierId','supplierName','address','postCode'] %}{% set _=ns.layout.append({'ref':'fixed:' ~ key,'groupId':''}) %}{% endfor %}
+  {% for f in core.supplierFields %}{% set _=ns.layout.append({'ref':'custom:' ~ f.fieldId,'groupId':f.get('groupId','')}) %}{% endfor %}
+{% endif %}
+{% set group_ids=core.get('fieldGroups',[])|map(attribute='groupId')|list %}
+{% for item in ns.layout %}
+  {% if not item.groupId or item.groupId not in group_ids %}{% set _=ns.ungrouped.append(item) %}{% endif %}
 {% endfor %}
 <div class="page-title-row">
-  <div><h1>Edit supplier data</h1><p class="subtitle">Spreadsheet-style editing for custom supplier fields only. Fixed supplier details are read-only here.</p></div>
+  <div><h1>Edit supplier data</h1><p class="subtitle">Spreadsheet-style editing follows your configured field groups and order. Fixed supplier details remain read-only.</p></div>
 </div>
 <form method="post" class="table-card bulk-edit-card" data-unsaved-guard>
   <div class="table-toolbar">
-    <div><h2>{{ core.panelName }}</h2><p>Custom fields are arranged using the panel's field groups. New fields appear automatically for existing suppliers.</p></div>
+    <div><h2>{{ core.panelName }}</h2><p>All supplier fields follow your panel configuration, including grouped fixed fields. Only custom values can be edited.</p></div>
     <div class="actions"><a class="btn" href="{{ url_for('panel_view', panel_id=panel.panel_id) }}">Cancel</a><button class="btn primary" type="submit">Save custom fields</button></div>
   </div>
   <div class="table-scroll bulk-table-scroll">
     <table class="data-table bulk-edit-table grouped-table">
       <thead>
         <tr class="group-header-row">
-          <th colspan="4">Supplier details</th>
           {% for g in core.get('fieldGroups', [])|sort(attribute='order') %}
-            {% set grouped_fields = core.supplierFields|selectattr('groupId','equalto',g.groupId)|list %}
-            {% if grouped_fields %}<th colspan="{{ grouped_fields|length }}">{{ g.name }}</th>{% endif %}
+            {% set items=ns.layout|selectattr('groupId','equalto',g.groupId)|list %}
+            {% if items %}<th colspan="{{ items|length }}">{{ g.name }}</th>{% endif %}
           {% endfor %}
-          {% if ungrouped %}<th colspan="{{ ungrouped|length }}">{{ 'Custom Fields' if not core.get('fieldGroups') else 'Ungrouped' }}</th>{% endif %}
+          {% if ns.ungrouped %}<th colspan="{{ ns.ungrouped|length }}">{{ 'Supplier details' if not core.get('fieldGroups') else 'Ungrouped' }}</th>{% endif %}
         </tr>
-        <tr><th>Supplier ID</th><th>Supplier Name</th><th>Address</th><th>Post Code</th>
-          {% for g in core.get('fieldGroups', [])|sort(attribute='order') %}
-            {% for f in core.supplierFields|selectattr('groupId','equalto',g.groupId)|list|sort(attribute='order') %}<th>{{ f.fieldName }}<small>{{ f.type|capitalize }}</small></th>{% endfor %}
+        <tr>
+          {% for g in core.get('fieldGroups',[])|sort(attribute='order') %}
+            {% set items=ns.layout|selectattr('groupId','equalto',g.groupId)|list %}
+            {{ render_headers(items,core.supplierFields) }}
           {% endfor %}
-          {% for f in ungrouped %}<th>{{ f.fieldName }}<small>{{ f.type|capitalize }}</small></th>{% endfor %}
+          {{ render_headers(ns.ungrouped,core.supplierFields) }}
         </tr>
       </thead>
       <tbody>
       {% for s in core.suppliers %}
         <tr>
-          <td class="readonly-cell"><a class="panel-link" href="{{ url_for('supplier_edit', panel_id=panel.panel_id, supplier_id=s.supplierId) }}">{{ s.supplierId }}</a></td>
-          <td class="readonly-cell">{{ s.supplierName }}</td>
-          <td class="readonly-cell">{{ s.address }}</td>
-          <td class="readonly-cell">{{ s.postCode }}</td>
-          {% for g in core.get('fieldGroups', [])|sort(attribute='order') %}
-            {% for f in core.supplierFields|selectattr('groupId','equalto',g.groupId)|list|sort(attribute='order') %}{{ edit_cell(s, f) }}{% endfor %}
+          {% for g in core.get('fieldGroups',[])|sort(attribute='order') %}
+            {% set items=ns.layout|selectattr('groupId','equalto',g.groupId)|list %}
+            {{ render_cells(s,items,core.supplierFields) }}
           {% endfor %}
-          {% for f in ungrouped %}{{ edit_cell(s, f) }}{% endfor %}
+          {{ render_cells(s,ns.ungrouped,core.supplierFields) }}
         </tr>
       {% else %}
         <tr><td colspan="99" class="empty">No suppliers to edit.</td></tr>
