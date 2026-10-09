@@ -261,3 +261,7 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [ ] Provide direct hash navigation, back/forward handling, correct active/ARIA state, responsive styling, and structural tests; keep save/cancel accessible in each pane via the existing shared submit action.
 
   - Stage B implementation (2026-10-09): three focused editor panes switched by the configuration cards, with deep-link/hash navigation, ARIA current state, one shared Save Configuration, no disabled hidden fields, and a fallback where all editors display without JavaScript. Hidden-pane invalid controls reveal their pane when the browser emits a validation event. Responsive styles and structural regression coverage added at 7f2cc8b. Acceptance pending: full pytest/browser validation and CI have not been confirmed; do not close UX-053/DEV-050.
+
+### UX-053 stage C — related administration links
+- [ ] Add a clearly separate "Related tools" hub for Panel Details, Template Library, Supplier Master Sync, JSON Export and Audit History using actual application routes. Keep it outside the unified configuration POST and explain that saving unsaved configuration changes is required before following links. Respect archived panel restrictions; do not imply linked tools are editable sections of the current form.
+- [ ] Preserve the three focused editor cards and add structural regression checks before claiming completion; verify CI.
