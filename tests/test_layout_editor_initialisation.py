@@ -30,3 +30,21 @@ def test_field_placement_uses_dedicated_responsive_grid():
     assert 'grid-template-columns:minmax(240px, 1fr) 72px minmax(165px, 220px) 36px 36px' in css
     assert 'width:36px;' in css
     assert '@media(max-width:720px)' in css
+
+
+def test_configuration_section_navigation_preserves_single_form():
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "templates" / "panel_configuration.html").read_text()
+    css = (root / "static" / "app.css").read_text()
+    assert 'aria-label="Configuration sections"' in html
+    for section in ("fields", "widgets", "scoring"):
+        assert 'href="#configuration_' + section + '"' in html
+        assert 'id="configuration_' + section + '"' in html
+    assert html.count('id="panel-form"') == 1
+    assert 'data-unsaved-guard' in html
+    for name in ("field_layout_json", "fields_json", "field_groups_json",
+                 "dashboard_widgets_json", "scoring_criteria_json"):
+        assert 'name="' + name + '"' in html
+    assert 'id="configuration-widgets"' in html
+    assert 'data-csrf-token=' in html
+    assert '@media(max-width:850px)' in css
