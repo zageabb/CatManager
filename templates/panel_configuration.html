@@ -15,10 +15,15 @@
     <div class="field-group-editor-head"><strong>Field groups</strong><span>Groups control the visible sections on supplier forms. Fields can remain ungrouped.</span></div>
     <div id="field-groups"></div>
   </div>
-  <div class="field-list">
-    <div id="custom-fields"></div><small class="help-text">Save any field to the reusable library from its row. Adding a predefined field creates an independent, editable copy.</small>
+  <div class="field-group-editor" id="supplier-field-arrangement">
+    <div class="field-group-editor-head"><strong>Fixed &amp; custom field placement</strong><span>Select where each field visibly appears on the supplier form. Use ↑ and ↓ to change its position within a group.</span></div>
+    <p class="help-text"><strong>Fixed fields:</strong> Supplier ID / BPID, Supplier Name, Address and Post Code. Choose a group for each in the list below. They remain mandatory fields.</p>
+    <div id="field-layout-editor"></div>
   </div>
-  <div class="field-group-editor"><div class="field-group-editor-head"><strong>Form display order</strong><span>Move any fixed or custom field up/down and choose its group. Group sections follow the group order above.</span></div><div id="field-layout-editor"></div></div>
+  <div class="field-list">
+    <h3>Custom field definitions</h3>
+    <div id="custom-fields"></div><small class="help-text">Edit custom field types and options here. Use the placement section above for visible groups and order.</small>
+  </div>
   <input type="hidden" id="field-layout-json" name="field_layout_json" value="{{ core.get('fieldLayout', [])|tojson|forceescape }}">
   <input type="hidden" id="field-groups-json" name="field_groups_json" value="{{ core.get('fieldGroups', [])|tojson|forceescape }}">
   <input type="hidden" id="fields-json" name="fields_json" value="{{ core.get('supplierFields', [])|tojson|forceescape }}">
