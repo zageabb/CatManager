@@ -255,3 +255,7 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [ ] Add responsive styling and structural regression checks, then verify full pytest and CI before marking this stage complete. Later hub cards (Templates, Master Sync etc.) must point to real routes and must not imply those settings are saved by this form.
 
   - Stage A implementation (2026-10-09): a keyboard-accessible, responsive 3-card section navigator links to Supplier Fields, Dashboard KPIs and Weighted Scoring within the same existing configuration form. The original POST field names, unsaved-change guard, preview CSRF token and single save action remain unchanged. Structural regression test committed at 873d9f88. Verification pending: repository status lookup returned no checks/workflow runs; the test runner could not retrieve the repository from this environment. Stage B (focused configuration hub/workflows) remains open; do not claim UX-053 completed.
+
+### UX-053 stage B — focused editing panes
+- [ ] Turn the three configuration navigation cards into accessible focused panes with a single unified POST; only one editor visible at a time when JavaScript is available, while all sections remain visible if scripts fail. Do not disable hidden inputs, lose unsaved edits when switching, or break live KPI previews.
+- [ ] Provide direct hash navigation, back/forward handling, correct active/ARIA state, responsive styling, and structural tests; keep save/cancel accessible in each pane via the existing shared submit action.
