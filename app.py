@@ -12,6 +12,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for, send_file
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from legacy_demo_data import LEGACY_DEMO_PANELS, LEGACY_MDF_CODES
 from supplier_excel import export_suppliers, preview_import, signature
@@ -97,6 +98,8 @@ def load_mdf_catalogue():
 
 def create_app(test_config=None):
     app = Flask(__name__)
+    # Honour the path prefix supplied by the trusted local UDA reverse proxy.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
     app.config.from_mapping(
         SECRET_KEY=os.environ.get("CATMANAGER_SECRET_KEY", "dev-change-me"),
         DATABASE=os.environ.get("CATMANAGER_DATABASE", str(Path(app.instance_path) / "catmanager.sqlite")),
