@@ -568,6 +568,39 @@
     renderScores();
   }
 
+
+  // UX-052: position row menus outside the scrollable table viewport.
+  const supplierRowMenus=[...document.querySelectorAll(".supplier-row-menu")];
+  function closeSupplierMenus(except){
+    supplierRowMenus.forEach(menu=>{if(menu!==except)menu.open=false;});
+  }
+  function placeSupplierMenu(menu){
+    const trigger=menu.querySelector("summary");
+    const dropdown=menu.querySelector(".supplier-row-dropdown");
+    if(!trigger||!dropdown)return;
+    const box=trigger.getBoundingClientRect();
+    const width=205;
+    const height=dropdown.offsetHeight||210;
+    const left=Math.max(8,Math.min(window.innerWidth-width-8,box.right-width));
+    const below=window.innerHeight-box.bottom;
+    dropdown.style.left=left+"px";
+    dropdown.style.top=(below>=height+12?box.bottom+6:Math.max(8,box.top-height-6))+"px";
+  }
+  supplierRowMenus.forEach(menu=>menu.addEventListener("toggle",()=>{
+    if(menu.open){closeSupplierMenus(menu);placeSupplierMenu(menu);}
+  }));
+  document.addEventListener("click",event=>{
+    if(!event.target.closest(".supplier-row-menu"))closeSupplierMenus();
+  });
+  document.addEventListener("keydown",event=>{
+    if(event.key==="Escape"){
+      const active=supplierRowMenus.find(menu=>menu.open);
+      if(active){active.open=false;active.querySelector("summary")?.focus();}
+    }
+  });
+  document.querySelectorAll(".supplier-workspace-scroll").forEach(table=>table.addEventListener("scroll",()=>closeSupplierMenus(),{passive:true}));
+  window.addEventListener("resize",()=>closeSupplierMenus());
+
   document.querySelectorAll("[data-copy]").forEach(function(btn){
     btn.addEventListener("click",async function(){const el=document.querySelector(btn.dataset.copy);if(!el)return;await navigator.clipboard.writeText(el.value||el.textContent||"");const old=btn.textContent;btn.textContent="Copied";setTimeout(function(){btn.textContent=old;},1200);});
   });
