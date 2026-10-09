@@ -71,7 +71,7 @@
         '<select class="layout-group" aria-label="Group for '+esc(label)+'">'+groupOptions(item.groupId)+'</select>'+
         '<button type="button" class="btn compact layout-up" aria-label="Move '+esc(label)+' up" '+(index===0?"disabled":"")+'>↑</button>'+
         '<button type="button" class="btn compact layout-down" aria-label="Move '+esc(label)+' down" '+(index===fieldLayout.length-1?"disabled":"")+'>↓</button>';
-      row.querySelector(".layout-group").addEventListener("change",e=>{item.groupId=e.target.value;const field=fields.find(f=>"custom:"+f.fieldId===item.ref);if(field){field.groupId=e.target.value;renderFields();}sync();});
+      row.querySelector(".layout-group").addEventListener("change",e=>{const current=fieldLayout.find(entry=>entry.ref===item.ref);if(current)current.groupId=e.target.value;const field=fields.find(f=>"custom:"+f.fieldId===item.ref);if(field){field.groupId=e.target.value;renderFields();}sync();});
       row.querySelector(".layout-up").addEventListener("click",()=>{[fieldLayout[index-1],fieldLayout[index]]=[fieldLayout[index],fieldLayout[index-1]];renderLayout();sync();});
       row.querySelector(".layout-down").addEventListener("click",()=>{[fieldLayout[index],fieldLayout[index+1]]=[fieldLayout[index+1],fieldLayout[index]];renderLayout();sync();});
       layoutRoot.appendChild(row);
