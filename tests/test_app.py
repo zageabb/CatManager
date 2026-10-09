@@ -1750,7 +1750,7 @@ def test_dev045_supplier_profile_joins_exact_id_across_panels(client):
     assert "CMP-PROFILE-A" in page and "CMP-PROFILE-B" in page
     assert "CMP-PROFILE-C" not in page
     assert "Example Trading" in page
-    assert "Profile" in client.get("/panels/CMP-PROFILE-A").get_data(as_text=True)
+    assert "Cross-panel profile" in client.get("/panels/CMP-PROFILE-A").get_data(as_text=True)
     assert client.get("/api/panels/CMP-PROFILE-A").get_json()==before_a
     assert client.get("/suppliers/UNKNOWN/profile").status_code==404
 
@@ -1921,3 +1921,30 @@ def test_ux051_supplier_tab_default_and_secondary_views(client):
         assert response.status_code==200
         assert heading in response.get_data(as_text=True)
     assert b'<h2>Suppliers</h2>' in client.get("/panels/CMP-UX051?tab=unrecognised").data
+
+def test_ux052_supplier_row_menu_preserves_actions_and_table_preferences(client):
+    create_panel(client,"CMP-UX052")
+    assert client.post("/panels/CMP-UX052/suppliers/new",data={
+        "supplier_id":"S1","supplier_name":"Menu Supplier","custom_rating":"4"
+    }).status_code==302
+    response=client.get("/panels/CMP-UX052")
+    assert response.status_code==200
+    html=response.get_data(as_text=True)
+    assert 'class="supplier-row-menu"' in html
+    assert 'aria-label="Actions for Menu Supplier"' in html
+    assert "Cross-panel profile" in html
+    assert "Delete supplier" in html
+    assert "Edit supplier" in html
+    assert "supplier-column-options" in html
+    assert "supplier-table-search" in html
+    assert "supplier-compare-check" in html
+    assert 'class="table-scroll supplier-workspace-scroll"' in html or "supplier-workspace-scroll" in html
+
+
+def test_ux052_archived_row_menu_hides_delete(client):
+    create_panel(client,"CMP-UX052-ARCH")
+    client.post("/panels/CMP-UX052-ARCH/suppliers/new",data={"supplier_id":"S1","supplier_name":"One"})
+    assert client.post("/panels/CMP-UX052-ARCH/archive",data={"confirm_panel_id":"CMP-UX052-ARCH"}).status_code==302
+    page=client.get("/panels/CMP-UX052-ARCH").get_data(as_text=True)
+    assert "Cross-panel profile" in page
+    assert "Delete supplier" not in page

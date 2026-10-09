@@ -217,7 +217,7 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 
 ## Approved future UX redesign — supplier-first panel (documentation only)
 - [x] **UX-051** Supplier workspace as default panel view; three primary actions and grouped overflow menu; tab sections for intelligence. Specification: [Supplier-first UX spec](docs/SUPPLIER_FIRST_PANEL_UX_SPEC.md).
-- [ ] **UX-052** Supplier-first table polish (compact KPI strip, search/filter/column settings, row menus, responsive wide fields).
+- [x] **UX-052** Supplier-first table polish (compact KPI strip, search/filter/column settings, row menus, responsive wide fields).
 - [ ] **UX-053** Card-based Panel Configuration hub, with existing workflows preserved and focused sections introduced incrementally.
 - [ ] **UX-054** Accessibility, CSRF/security regression, layout smoke tests, screenshots and release notes.
   - Implementation guide: [Supplier-first implementation plan](docs/SUPPLIER_FIRST_PANEL_IMPLEMENTATION.md). **These are approved plans, NOT completed development. Do not change live UI in this docs-only change.**
@@ -225,3 +225,7 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 ### UX-051 implementation — in progress
 - [x] Reorder supplier content first, add tab navigation, keep edit/configuration/add supplier and move secondary actions to grouped menu; preserve existing endpoints, tests, and CI.
   - Evidence: supplier list and compact configured KPI strip default, header Edit Panel / Panel Configuration / Add Supplier, grouped actions overflow, and Overview, Dashboard, Scoring, Actions, History server-selected tabs. Existing KPI/scoring/coverage regression tests were redirected to relevant tab; all tests passed in CI run 37855882265 on ed640a8a189d1df485ac465cce27c040adb0f807. UX-052–054 remain future stages.
+
+### UX-052 implementation — in progress
+- [x] Replace crowded supplier-row buttons with an accessible actions menu, keep comparisons, filtering, sorting and column preferences, and improve responsive wide-table controls. Preserve deletion confirmation, CSRF, and all existing actions. Verify CI and merge only when green.
+  - Evidence: supplier row contextual menu with Edit, Actions, History, Cross-panel Profile, and safeguarded Delete; responsive table scroll, clearer search/filter controls, and Esc/outside-click dismissal. Preserved comparison and browser column settings. All 82 tests passed in PR CI 37898627208 at c7708bd353e5636a1ec613b2f0dd9255e10f5e65. UX-053–054 remain planned.
