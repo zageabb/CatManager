@@ -6,8 +6,14 @@
 <div class="page-title-row">
   <div><h1>Panel Configuration</h1><p class="subtitle">{{ core.panelName }} — define the supplier fields and how they are grouped on supplier forms.</p></div>
 </div>
+<nav class="configuration-navigation" aria-label="Configuration sections">
+  <a class="configuration-nav-card" href="#configuration-fields"><span class="configuration-nav-icon" aria-hidden="true">▤</span><strong>Supplier fields</strong><small>Groups, fixed fields &amp; custom fields</small></a>
+  <a class="configuration-nav-card" href="#configuration-widgets"><span class="configuration-nav-icon" aria-hidden="true">▥</span><strong>Dashboard KPIs</strong><small>Panel and supplier calculations</small></a>
+  <a class="configuration-nav-card" href="#configuration-scoring"><span class="configuration-nav-icon" aria-hidden="true">★</span><strong>Weighted scoring</strong><small>Supplier assessment criteria</small></a>
+</nav>
+<p class="configuration-save-note">All three sections share one <strong>Save Configuration</strong> action at the bottom of this page.</p>
 <form method="post" class="form-card" id="panel-form" data-unsaved-guard>
-  <div class="section-heading">
+  <div class="section-heading" id="configuration-fields">
     <div><h2>Supplier data definition</h2><p>Fixed and custom fields can be assigned to groups and reordered. Fixed fields cannot be removed.</p></div>
     <div class="actions"><button class="btn" type="button" id="add-group">+ Add group</button><button class="btn" type="button" id="add-field">+ Add custom field</button><select id="template-selector" aria-label="Predefined field"><option value="">Select predefined field…</option></select><button class="btn" type="button" id="add-template-field">+ Use predefined</button></div>
   </div>
@@ -27,11 +33,11 @@
   <input type="hidden" id="field-layout-json" name="field_layout_json" value="{{ core.get('fieldLayout', [])|tojson|forceescape }}">
   <input type="hidden" id="field-groups-json" name="field_groups_json" value="{{ core.get('fieldGroups', [])|tojson|forceescape }}">
   <input type="hidden" id="fields-json" name="fields_json" value="{{ core.get('supplierFields', [])|tojson|forceescape }}">
-  <div class="section-heading"><div><h2>Dashboard Widgets</h2><p>Display up to six supplier KPIs above the supplier table. Choose a source custom field, calculation (Average / Minimum / Maximum for ratings), and output as stars, number or both. Ratio still uses Sum(Field) ÷ Sum(Other field).</p></div><button class="btn" type="button" id="add-widget">+ Add KPI</button></div>
+  <div class="section-heading" id="configuration-widgets"><div><h2>Dashboard Widgets</h2><p>Display up to six supplier KPIs above the supplier table. Choose a source custom field, calculation (Average / Minimum / Maximum for ratings), and output as stars, number or both. Ratio still uses Sum(Field) ÷ Sum(Other field).</p></div><button class="btn" type="button" id="add-widget">+ Add KPI</button></div>
   <p class="help-text">Step 1: Name the KPI. Step 2: Choose calculation and source field. Step 3: Set its output format and display location. The preview uses current supplier data without saving.</p>
   <div id="dashboard-widgets" data-preview-url="{{ url_for('dashboard_widget_preview', panel_id=panel.panel_id) }}" data-csrf-token="{{ csrf_token() }}" data-fields='{{ core.get("supplierFields", [])|tojson|forceescape }}'></div>
   <input type="hidden" id="dashboard-widgets-json" name="dashboard_widgets_json" value="{{ core.get('dashboardWidgets', [])|tojson|forceescape }}">
-<section class="field-group-editor"><h2>Weighted Supplier Scoring</h2><p class="help-text">Select star or numeric assessment fields rated 0–5. Set relative weights (e.g. Quality 60, Delivery 40). A supplier without all ratings shows Incomplete, rather than a misleading total.</p><div id="scoring-rules" data-fields='{{ core.get("supplierFields", [])|tojson|forceescape }}'></div><button type="button" class="btn" id="add-scoring-rule">+ Add scoring criterion</button><input type="hidden" id="scoring-criteria-json" name="scoring_criteria_json" value="{{ core.get('scoringCriteria', [])|tojson|forceescape }}"></section>
+<section class="field-group-editor" id="configuration-scoring"><h2>Weighted Supplier Scoring</h2><p class="help-text">Select star or numeric assessment fields rated 0–5. Set relative weights (e.g. Quality 60, Delivery 40). A supplier without all ratings shows Incomplete, rather than a misleading total.</p><div id="scoring-rules" data-fields='{{ core.get("supplierFields", [])|tojson|forceescape }}'></div><button type="button" class="btn" id="add-scoring-rule">+ Add scoring criterion</button><input type="hidden" id="scoring-criteria-json" name="scoring_criteria_json" value="{{ core.get('scoringCriteria', [])|tojson|forceescape }}"></section>
   <div class="form-actions"><a class="btn" href="{{ url_for('panel_view', panel_id=panel.panel_id) }}">Cancel</a><button class="btn primary" type="submit">Save Configuration</button></div>
 </form>
 {% endblock %}
