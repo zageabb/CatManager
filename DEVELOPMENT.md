@@ -268,3 +268,8 @@ Build on feature/v3-panel-enhancements; keep `Version_2_Demo` immutable. Update 
 - [ ] Preserve the three focused editor cards and add structural regression checks before claiming completion; verify CI.
 
   - Stage C implementation (2026-10-09): added Related administration tools links to actual panel metadata, reusable template library, supplier master synchronisation, JSON export and audit history routes. Restricted master sync link on archived panels. Kept navigation outside the configuration form; all three editors and the single Save Configuration action remain unchanged. Added structural and Flask route regression coverage (1ba5a984). Test execution and commit CI remain unverified; keep UX-053 open pending verification.
+
+### UX-054 stage A — configuration keyboard accessibility (2026-10-13)
+- [ ] Verify desktop and mobile browser behaviour and full regression suite before marking complete.
+  - Implemented: configuration cards now expose aria-controls, target panes accept programmatic focus, keyboard arrows/Home/End navigate cards, and clicking cards focuses the selected editor without disrupting the unified save form. Structural regression coverage at d8458010.
+  - Remaining: hands-on focus/screen-reader testing, browser viewport smoke tests, CSRF-enabled end-to-end regression and commit-specific CI verification. Existing DEV-050/UX-053 open items remain open until verified.
