@@ -1,4 +1,9 @@
 (() => {
+  // Resolve API URLs relative to this script, preserving reverse-proxy mount prefixes.
+  const scriptUrl = document.currentScript?.src || document.querySelector('script[src*="/static/app.js"]')?.src;
+  function apiUrl(path) {
+    return new URL("../api/" + path, scriptUrl || new URL("static/app.js", document.baseURI)).toString();
+  }
   const root = document.querySelector("#custom-fields");
   const hidden = document.querySelector("#fields-json");
   const add = document.querySelector("#add-field");
@@ -23,7 +28,7 @@
   async function loadFieldTemplates(){
     if(!templateSelector)return;
     try{
-      const response=await fetch("/api/field-templates");
+      const response=await fetch(apiUrl("field-templates"));
       if(!response.ok)throw new Error("Unable to load templates");
       fieldTemplates=await response.json();
       templateSelector.innerHTML='<option value="">Select predefined field…</option>'+
@@ -154,7 +159,7 @@
         const button=this;
         button.disabled=true;
         try {
-          const response=await fetch("/api/field-templates",{
+          const response=await fetch(apiUrl("field-templates"),{
             method:"POST",headers:{"Content-Type":"application/json"},
             body:JSON.stringify(fields[index])
           });
@@ -387,7 +392,7 @@
       if(controller)controller.abort();
       controller=new AbortController();
       try{
-        const response=await fetch("/api/supplier-master/search?q="+encodeURIComponent(q),{signal:controller.signal});
+        const response=await fetch(apiUrl("supplier-master/search?q="+encodeURIComponent(q)),{signal:controller.signal});
         if(!response.ok)throw new Error("search failed");
         renderSupplierResults(await response.json());
       }catch(e){
