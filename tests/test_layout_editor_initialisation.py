@@ -95,3 +95,15 @@ def test_related_tool_routes_render_for_existing_panel(tmp_path):
     assert "/panels/TOOLS-001/suppliers/master-sync" in html
     assert "/panels/TOOLS-001/export" in html
     assert "/panels/TOOLS-001/audit" in html
+
+
+def test_configuration_navigation_keyboard_and_focus_accessibility():
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "templates" / "panel_configuration.html").read_text()
+    js = (root / "static" / "app.js").read_text()
+    for name in ("fields", "widgets", "scoring"):
+        assert 'aria-controls="configuration-' + name + '"' in html
+        assert 'id="configuration-' + name + '" tabindex="-1"' in html
+    assert '["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"]' in js
+    assert 'requestAnimationFrame(()=>document.getElementById(id)?.focus({preventScroll:true}))' in js
+    assert 'configNav.addEventListener("keydown"' in js
